@@ -34,5 +34,7 @@ library
     , aeson
     , ListLike
     , constraints
+    , type-combinators
+    , generics-sop
   hs-source-dirs:      src
   default-language:    Haskell2010
