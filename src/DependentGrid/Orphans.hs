@@ -1,13 +1,17 @@
-{-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE KindSignatures       #-}
-{-# LANGUAGE PolyKinds            #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE TypeInType           #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures             #-}
+{-# LANGUAGE PolyKinds                  #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeInType                 #-}
+{-# LANGUAGE UndecidableInstances       #-}
 
 module DependentGrid.Orphans where
 
+import           Control.Monad.Identity
 import           Data.AdditiveGroup
 import           Data.Kind
 import           Data.Proxy
@@ -16,6 +20,8 @@ import           Data.Sized                as S
 import qualified Data.Type.Natural         as Peano
 import           Data.Type.Natural.Builtin
 import           Data.Type.Ordinal
+import           Generics.SOP              (Generic)
+import qualified GHC.Generics              as GHC (Generic)
 import qualified GHC.TypeLits              as GHC
 
 instance (S.ListLikeF f, SingI n, HasOrdinal nat, AdditiveGroup a) =>
@@ -35,3 +41,7 @@ instance IsTypeNum GHC.Nat where
 instance IsTypeNum Peano.Nat where
   type AsNat a = FromPeano a
   type FromNat a = ToPeano a
+
+instance Generic (Identity a)
+
+deriving instance AdditiveGroup a => AdditiveGroup (Identity a)

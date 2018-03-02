@@ -36,5 +36,6 @@ library
     , constraints
     , type-combinators
     , generics-sop
+    , mtl
   hs-source-dirs:      src
   default-language:    Haskell2010
