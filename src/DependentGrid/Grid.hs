@@ -34,6 +34,7 @@ import           Data.Foldable
 import           Data.Functor.Classes
 import           Data.Functor.Rep
 import           Data.Kind                    (Type)
+import           Data.List                    (sort)
 import qualified Data.List.NonEmpty           as NE
 import qualified Data.ListLike                as L
 import           Data.Maybe                   (fromJust)
@@ -41,8 +42,10 @@ import           Data.Proxy                   (Proxy (..))
 import           Data.Singletons
 import qualified Data.Singletons.Prelude.List as S
 import           Data.Type.Monomorphic
+import qualified Data.Type.Natural            as Peano
 import           Data.Type.Ordinal
 import           Data.Unfoldable
+import qualified Data.Vector                  as V
 import           Debug.Trace
 import           Generics.SOP                 (All)
 import qualified GHC.TypeLits                 as GHC
@@ -92,6 +95,14 @@ instance (Foldable f, MonadZip f) => Eq1 (Grid cs f) where
 
 instance (Foldable f, MonadZip f, Eq a) => Eq (Grid cs f a) where
   (==) = liftEq (==)
+
+instance (Foldable f, MonadZip f) => Ord1 (Grid cs f) where
+  liftCompare func (EmptyGrid a) (EmptyGrid b) = func a b
+  liftCompare func (AddGridLayer as) (AddGridLayer bs) =
+    foldMap id $ mzipWith (liftCompare func) as bs
+
+instance (Foldable f, MonadZip f, Ord a) => Ord (Grid cs f a) where
+  compare = liftCompare compare
 
 instance (Functor f, Foldable f) => Show1 (Grid cs f) where
   liftShowsPrec sFunc mFunc n (EmptyGrid a) = sFunc n a
@@ -202,3 +213,23 @@ instance ( AllAmountPossibleKnowNat cs
         withSingI stail $
         AddGridLayer <$>
         AddGridLayer (sequenceA <$> duplicate (duplicate <$> gl))
+
+overGridLayer ::
+     forall n cs f a. (SingI (AsPeano n), Functor f, IsTypeNum nat)
+  => Proxy (n :: nat)
+  -> (forall x. f x -> f x)
+  -> Grid cs f a
+  -> Grid cs f a
+overGridLayer _ f gs =
+  case (sing :: Sing (AsPeano n), gs) of
+    (Peano.SZ, AddGridLayer as) -> AddGridLayer (f as)
+    (Peano.SS (n :: Sing m), AddGridLayer as) ->
+      withSingI n $ AddGridLayer (overGridLayer (Proxy :: Proxy m) f <$> as)
+
+overAllLayers :: Traversable f => (forall x . f x -> f x) -> Grid cs f a -> [ Grid cs f a ]
+overAllLayers _ (EmptyGrid a)     = pure (EmptyGrid a)
+overAllLayers f (AddGridLayer gl) =
+  map
+    AddGridLayer
+    (traverse (overAllLayers id) (f gl) ++ traverse (overAllLayers f) gl)
+

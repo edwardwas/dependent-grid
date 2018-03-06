@@ -14,6 +14,7 @@ import           Control.Lens
 import           Data.AdditiveGroup
 import           Data.AffineSpace
 import           Data.Kind                    (Type)
+import qualified Data.List.NonEmpty           as NE
 import qualified Data.ListLike                as L
 import           Data.Maybe                   (fromJust)
 import           Data.Singletons              (Sing, sing)
@@ -65,3 +66,11 @@ makeAllBounded =
               then Just (a, Nothing)
               else Just (a, Just $ succ a)))
     (Just minBound)
+
+class Cyclable f where
+  moveForeward :: f a -> f a
+  moveBackwards :: f a -> f a
+
+instance Cyclable NE.NonEmpty where
+  moveForeward (a NE.:| as) = NE.fromList (as ++ [a])
+  moveBackwards (a NE.:| as) = NE.fromList (last as : a : init as)

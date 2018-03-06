@@ -19,13 +19,14 @@ import           Data.Proxy
 import           Data.Singletons
 import           Data.Singletons.Decide
 import           Data.Singletons.Prelude.Enum
-import           Data.Sized                   as S
+import qualified Data.Sized                   as S hiding ()
 import qualified Data.Type.Natural            as Peano
 import           Data.Type.Natural.Builtin
 import           Data.Type.Ordinal
 import           Data.Unfoldable
+import qualified Data.Vector                  as V
 import           Generics.SOP                 (Generic)
-import qualified GHC.Generics                 as GHC (Generic)
+import qualified GHC.Generics                 as GHC (Generic, Generic1)
 import qualified GHC.TypeLits                 as GHC
 
 instance (S.ListLikeF f, SingI n, HasOrdinal nat, AdditiveGroup a) =>
@@ -39,3 +40,6 @@ instance Generic (Identity a)
 deriving instance AdditiveGroup a => AdditiveGroup (Identity a)
 
 instance Unfoldable NE.NonEmpty
+
+instance Unfoldable V.Vector where
+  unfold = fmap V.fromList . unfold
