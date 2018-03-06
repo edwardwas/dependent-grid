@@ -1,171 +1,162 @@
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GADTs                      #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE PolyKinds                  #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TypeApplications           #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeInType                 #-}
-{-# LANGUAGE TypeOperators              #-}
-{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE AllowAmbiguousTypes    #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE InstanceSigs           #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE PolyKinds              #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TypeApplications       #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE TypeInType             #-}
+{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE UndecidableInstances   #-}
 
 module DependentGrid.Coord where
 
+import           DependentGrid.Class
 import           DependentGrid.Coord.Periodic
 import           DependentGrid.Orphans
 
-import           Control.Monad.Identity
+import           Control.Lens                       hiding (from, to, (%~))
+import           Control.Monad.Identity             (Identity (..))
 import           Data.AdditiveGroup
 import           Data.AffineSpace
-import           Data.Coerce
 import           Data.Constraint
 import           Data.Group
 import           Data.Kind                          (Type)
 import           Data.List                          (intercalate)
+import           Data.Promotion.Prelude.List        ((:!!))
 import           Data.Semigroup                     (Semigroup (..))
 import           Data.Singletons
-import           Data.Singletons.Prelude.List       (Sing (..))
+import           Data.Singletons.Decide
+import           Data.Singletons.Prelude.List       hiding (All, Group, Zip)
+import qualified Data.Singletons.Prelude.List       as S
 import           Data.Singletons.Prelude.Num
-import qualified Data.Sized                         as S
+import           Data.Singletons.Prelude.Ord        (POrd (..))
+import qualified Data.Singletons.TypeLits           as S
+import qualified Data.Type.Natural                  as Nat
 import           Data.Type.Natural.Class.Arithmetic
-import           Generics.SOP                       hiding (SCons, SNil, Sing,
-                                                     SingI, sing)
-
+import           Data.Type.Ordinal
+import           Generics.SOP                       hiding (SCons, SNil,
+                                                     Sing (..), SingI, sing)
 import qualified GHC.TypeLits                       as GHC
 
-type family AllConstraint c f xs :: Constraint where
-    AllConstraint c f '[] = ()
-    AllConstraint c f (x ': xs) = (c (f x), AllConstraint c f xs)
+type family IndexList n xs where
+    IndexList Nat.Z (x ': _) = x
+    IndexList Nat.Z '[] = GHC.TypeError (GHC.Text "This list is too short for use with IndexList")
+    IndexList (Nat.S n) (_ ': xs) = IndexList n xs
 
-data Coord (c :: nat -> Type) (xs :: [nat]) where
-    NoCoord :: Coord c '[]
-    AddCoord :: c x -> Coord c xs -> Coord c (x : xs)
+certIxHelper :: Sing n -> Lens' (Coord xs) (IndexList n xs)
+certIxHelper Zero f (AddCoord x xs)     = (\x' -> AddCoord x' xs) <$> f x
+certIxHelper (Succ n) f (AddCoord x xs) = AddCoord x <$> certIxHelper n f xs
 
-instance AllConstraint Eq c xs => Eq (Coord c xs) where
-    NoCoord == NoCoord = True
-    AddCoord (a :: c x) as == AddCoord b bs = (a == b && as == bs)
+certIxCoord ::
+       forall n xs. (IsTypeNum nat, SingI n)
+    => Proxy (n :: nat)
+    -> Lens' (Coord xs) (IndexList (AsPeano n) xs)
+certIxCoord _ = certIxHelper (asPeano $ (sing :: Sing n))
 
-instance (SingI xs, AllConstraint Show c xs) => Show (Coord c xs) where
-    show coord =
-        let helper ::
-                   forall c xs. (SingI xs, AllConstraint Show c xs)
-                => Coord c xs
-                -> [String]
-            helper NoCoord = []
-            helper (AddCoord a as) =
-                case (sing :: Sing xs) of
-                    SCons (_ :: Sing y) sTail ->
-                        show a : withSingI sTail (helper as)
-        in "Coord (" ++ intercalate ", " (helper coord) ++ ")"
+data Coord (xs :: [Type]) :: Type where
+  EmptyCoord :: Coord '[]
+  AddCoord :: x -> Coord xs -> Coord (x ': xs)
 
-instance AllConstraint Semigroup c xs => Semigroup (Coord c xs) where
-    NoCoord <> NoCoord = NoCoord
-    AddCoord a as <> AddCoord b bs = AddCoord (a <> b) (as <> bs)
+instance (x ~ IndexList (AsPeano 0) xs) => Field1 (Coord xs) (Coord xs) x x where
+    _1 = certIxCoord (Proxy @0)
 
-instance (SingI xs, AllConstraint Monoid c xs, AllConstraint Semigroup c xs) =>
-         Monoid (Coord c xs) where
-    mappend = (<>)
+instance (x ~ IndexList (AsPeano 1) xs) => Field2 (Coord xs) (Coord xs) x x where
+    _2 = certIxCoord (Proxy @1)
+
+instance (x ~ IndexList (AsPeano 2) xs) => Field3 (Coord xs) (Coord xs) x x where
+    _3 = certIxCoord (Proxy @2)
+
+instance (x ~ IndexList (AsPeano 3) xs) => Field4 (Coord xs) (Coord xs) x x where
+    _4 = certIxCoord (Proxy @3)
+
+instance All Eq xs => Eq (Coord xs) where
+  EmptyCoord == EmptyCoord = True
+  AddCoord a as == AddCoord b bs = a == b && as == bs
+
+instance All Show xs => Show (Coord xs) where
+    show c =
+        let helper :: All Show ys => Coord ys -> [String]
+            helper EmptyCoord      = []
+            helper (AddCoord x xs) = show x : helper xs
+        in "Coord (" ++ intercalate ", " (helper c) ++ ")"
+
+instance All Semigroup xs => Semigroup (Coord xs) where
+  EmptyCoord <> EmptyCoord = EmptyCoord
+  AddCoord a as <> AddCoord b bs = AddCoord (a <> b) (as <> bs)
+
+instance (SingI xs, All Monoid xs) => Monoid (Coord xs) where
+    mappend EmptyCoord EmptyCoord = EmptyCoord
+    mappend (AddCoord a as) (AddCoord b bs) =
+        case (sing :: Sing xs) of
+            (SCons _ stail) ->
+                AddCoord (mappend a b) (withSingI stail $ mappend as bs)
     mempty =
         case (sing :: Sing xs) of
-            SNil          -> NoCoord
-            SCons _ stail -> AddCoord mempty $ withSingI stail mempty
+            SNil -> EmptyCoord
+            (SCons _ xtail) ->
+                AddCoord mempty $ withSingI xtail mempty
 
-instance ( AllConstraint Monoid c xs
-         , AllConstraint Semigroup c xs
-         , AllConstraint Group c xs
-         , SingI xs
-         ) =>
-         Group (Coord c xs) where
-    invert NoCoord         = NoCoord
-    invert (AddCoord a as) = AddCoord (invert a) as
+instance (All Monoid xs, All Group xs, SingI xs) => Group (Coord xs) where
+    invert EmptyCoord = EmptyCoord
+    invert (AddCoord a as) =
+        case (sing :: Sing xs) of
+            (SCons _ xtail) -> withSingI xtail $ AddCoord (invert a) (invert as)
 
-instance (SingI xs, AllConstraint AdditiveGroup c xs) =>
-         AdditiveGroup (Coord c xs) where
+instance (All AdditiveGroup xs, SingI xs) => AdditiveGroup (Coord xs) where
     zeroV =
         case (sing :: Sing xs) of
-            SNil          -> NoCoord
-            SCons _ stail -> AddCoord zeroV $ withSingI stail zeroV
-    a ^+^ b =
-        let helper ::
-                   AllConstraint AdditiveGroup c ys
-                => Coord c ys
-                -> Coord c ys
-                -> Coord c ys
-            helper NoCoord NoCoord = NoCoord
-            helper (AddCoord a as) (AddCoord b bs) =
-                AddCoord (a ^+^ b) (helper as bs)
-        in helper a b
-    negateV c =
-        let helper ::
-                   AllConstraint AdditiveGroup c ys => Coord c ys -> Coord c ys
-            helper NoCoord         = NoCoord
-            helper (AddCoord a as) = AddCoord (negateV a) (helper as)
-        in helper c
+            SNil            -> EmptyCoord
+            (SCons _ xtail) -> AddCoord zeroV $ withSingI xtail zeroV
+    negateV EmptyCoord = EmptyCoord
+    negateV (AddCoord a as) =
+        case (sing :: Sing xs) of
+            (SCons _ xtail) -> AddCoord (negateV a) $ withSingI xtail negateV as
+    EmptyCoord ^+^ EmptyCoord = EmptyCoord
+    AddCoord a as ^+^ AddCoord b bs =
+        case (sing :: Sing xs) of
+            (SCons _ xtail) -> AddCoord (a ^+^ b) $ withSingI xtail (as ^+^ bs)
 
-type family DiffCoord (c :: k -> Type) (xs :: [k]) :: Type where
-  DiffCoord c '[] = ()
-  DiffCoord c '[a] = Identity (Diff (c a))
-  DiffCoord c '[a,b] = (Diff (c a), Diff (c b))
-  DiffCoord c '[a,b,d] = (Diff (c a), Diff (c b), Diff (c d))
+type family DiffCoord (xs :: [k]) :: Type where
+  DiffCoord '[] = ()
+  DiffCoord '[a] = Identity (Diff a)
+  DiffCoord '[a,b] = (Diff a, Diff b)
+  DiffCoord '[a,b,c] = (Diff a, Diff b, Diff c)
+  DiffCoord '[a,b,c,d] = (Diff a, Diff b, Diff c, Diff d)
 
-type family Head xs where
-  Head (x ': xs) = x
+type family MapDiff xs where
+  MapDiff '[] = '[]
+  MapDiff (x ': xs) = Diff x ': MapDiff xs
 
-type family MapDiff c xs where
-  MapDiff _ '[] = '[]
-  MapDiff c (x ': xs) = Diff (c x) ': MapDiff c xs
+negHelper ::
+       forall cs xs. All AffineSpace xs
+    => Coord xs
+    -> Coord xs
+    -> NP I (MapDiff xs)
+negHelper EmptyCoord EmptyCoord           = Nil
+negHelper (AddCoord a as) (AddCoord b bs) = I (a .-. b) :* negHelper as bs
 
-newtype DiffC c x = DiffC { unDiffC ::  Diff (c x) }
+addHelper :: All AffineSpace xs => Coord xs -> NP I (MapDiff xs) -> Coord xs
+addHelper EmptyCoord Nil              = EmptyCoord
+addHelper (AddCoord a as) (I b :* bs) = AddCoord (a .+^ b) $ addHelper as bs
 
-deriving instance Show (Diff (c x)) => Show (DiffC c x)
-
-negHelper :: AllConstraint AffineSpace c xs => Coord c xs -> Coord c xs -> NP (DiffC c) xs
-negHelper NoCoord NoCoord = Nil
-negHelper (AddCoord a as) (AddCoord b bs) = DiffC (a .-. b)  :* negHelper as bs
-
-diffCoordToTuple ::
-       ( Code (DiffCoord c xs) ~ '[ MapDiff c xs]
-       , Generic (DiffCoord c xs)
-       , SameShapeAs xs (MapDiff c xs)
-       , SameShapeAs (MapDiff c xs) xs
-       , AllZipN NP (LiftedCoercible (DiffC c) I) xs (MapDiff c xs)
-       )
-    => NP (DiffC c) xs
-    -> DiffCoord c xs
-diffCoordToTuple = to . SOP . Z . htoI
-
-tupleToDiffCoord ::
-       ( IsProductType (DiffCoord c xs) (MapDiff c xs)
-       , SameShapeAs xs (MapDiff c xs)
-       , SameShapeAs (MapDiff c xs) xs
-       , AllZipN NP (LiftedCoercible I (DiffC c)) (MapDiff c xs) xs
-       )
-    => DiffCoord c xs
-    -> NP (DiffC c) xs
-tupleToDiffCoord x =
-    case from x of
-        SOP (Z n) -> hfromI n
-
-addHelper :: AllConstraint AffineSpace c xs => Coord c xs -> NP (DiffC c) xs -> Coord c xs
-addHelper NoCoord Nil = NoCoord
-addHelper (AddCoord a as) (DiffC b :* bs) = AddCoord (a .+^ b) $ addHelper as bs
-
-instance ( AdditiveGroup (DiffCoord c xs)
-         , Code (DiffCoord c xs) ~ '[ MapDiff c xs]
-         , Generic (DiffCoord c xs)
-         , SameShapeAs xs (MapDiff c xs)
-         , SameShapeAs (MapDiff c xs) xs
-         , AllZipN NP (LiftedCoercible (DiffC c) I) xs (MapDiff c xs)
-         , AllZipN NP (LiftedCoercible I (DiffC c))  (MapDiff c xs) xs
-         , AllConstraint AffineSpace c xs
+instance ( IsProductType (DiffCoord xs) (MapDiff xs)
+         , AdditiveGroup (DiffCoord xs)
+         , All AffineSpace xs
          ) =>
-         AffineSpace (Coord c xs) where
-    type Diff (Coord c xs) = DiffCoord c xs
-    a .-. b =
-        diffCoordToTuple $ negHelper a b
-    a .+^ b = addHelper a $ tupleToDiffCoord b
+         AffineSpace (Coord xs) where
+    type Diff (Coord xs) = DiffCoord xs
+    a .-. b = to $ SOP $ Z $ negHelper a b
+    a .+^ b =
+        let helper :: IsProductType x codeX => x -> NP I codeX
+            helper x =
+                case from x of
+                    SOP (Z n) -> n
+        in addHelper a (helper b)

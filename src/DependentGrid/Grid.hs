@@ -1,92 +1,118 @@
-{-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE GADTs                #-}
-{-# LANGUAGE InstanceSigs         #-}
-{-# LANGUAGE PolyKinds            #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TypeInType           #-}
-{-# LANGUAGE TypeOperators        #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveTraversable     #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE InstanceSigs          #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeInType            #-}
+{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 module DependentGrid.Grid where
 
-import           Data.Functor.Classes
-import           Data.Kind
-import           Data.ListLike                 (ListLike)
-import           Data.Proxy
+import           DependentGrid.Class
+import           DependentGrid.Coord
+import           DependentGrid.Coord.Periodic
+
+import           Control.Lens
+import           Data.Constraint
+import           Data.Constraint.Forall
+import           Data.Kind                    (Type)
+import qualified Data.ListLike                as L
+import           Data.Proxy                   (Proxy (..))
 import           Data.Singletons
-import           Data.Singletons.Prelude.List
-import           Data.Singletons.Prelude.Ord   (Min)
-import qualified Data.Sized                    as S
+import qualified Data.Singletons.Prelude.List as S
 import           Data.Type.Monomorphic
-import           Data.Type.Natural.Class.Order
-import           Data.Type.Ordinal             (HasOrdinal)
-import           Text.Show
+import           Data.Type.Ordinal
+import           Debug.Trace
+import           Generics.SOP                 (All)
+import qualified GHC.TypeLits                 as GHC
+import           Unsafe.Coerce                (unsafeCoerce)
 
-data Grid (c :: nat -> Type) (is :: [nat]) (f :: Type -> Type) (a :: Type) where
-  EmptyGrid :: a -> Grid c '[] f a
-  GridLayer :: S.Sized f i (Grid c is f a)  -> Grid c (i ': is) f a
+class (L.ListLike (f a) a) => LLF f a
+instance (L.ListLike (f a) a) => LLF f a
 
-instance (S.ListLikeF f, Foldable f) => Eq1 (Grid cord is f) where
-  liftEq f (EmptyGrid a) (EmptyGrid b) = f a b
-  liftEq (f :: a -> b -> Bool) (GridLayer a) (GridLayer b) =
-    S.withListLikeF' (S.unsized a) $
-    S.withListLikeF' (S.unsized b) $
-    S.withListLikeF (Proxy :: Proxy (f Bool)) $ and $ S.zipWith (liftEq f) a b
+type ListLikeF f = Forall (LLF f)
 
-instance (S.ListLikeF f, Foldable f, Eq a) => Eq (Grid coord is f a) where
-  (==) = liftEq (==)
+withListLikeF ::
+       forall proxy f a b. ListLikeF f
+    => proxy (f a)
+    -> (L.ListLike (f a) a =>
+            b)
+    -> b
+withListLikeF _ b = b \\ entail
+  where
+    entail = inst :: ListLikeF f :- LLF f a
 
-instance (S.ListLikeF f) => Show1 (Grid coord is f) where
-  liftShowsPrec sFunc mFunc n (EmptyGrid a) =
-    showString "EmptyGrid " . sFunc n a
-  liftShowsPrec sFunc mFunc n (GridLayer gl) = S.withListLikeF' (S.unsized gl) $
-    showString "GridLayer " .
-    showListWith (liftShowsPrec sFunc mFunc (n+1)) (S.toList gl)
+type family ItemsRequired xs where
+  ItemsRequired '[] = 1
+  ItemsRequired (x ': xs) = AmountPossible x GHC.* ItemsRequired xs
 
-instance (S.ListLikeF f, Show a) => Show (Grid coord is f a) where
-  showsPrec = liftShowsPrec showsPrec showList
+type family AllAmountPossibleKnowNat xs :: Constraint where
+    AllAmountPossibleKnowNat '[] = ()
+    AllAmountPossibleKnowNat (x ': xs) = ( GHC.KnownNat (AmountPossible x)
+                                         , AllAmountPossibleKnowNat xs)
 
-instance Functor f => Functor (Grid c is f) where
-  fmap f (EmptyGrid a) = EmptyGrid (f a)
-  fmap f (GridLayer l) = GridLayer (fmap f <$> l)
+newtype Grid (cs :: [Type]) f a = Grid {unGrid :: f a}
+  deriving (Eq,Show,Functor,Foldable,Traversable)
 
-instance (Functor f, Foldable f) => Foldable (Grid c is f) where
-  foldMap f (EmptyGrid a) = f a
-  foldMap f (GridLayer l) = foldMap id (foldMap f <$> l)
+instance (GHC.KnownNat (ItemsRequired cs), Applicative f, ListLikeF f) =>
+         Applicative (Grid cs f) where
+    pure (a :: a) =
+        withListLikeF (Proxy :: Proxy (f a)) $
+        Grid $
+        L.genericReplicate (GHC.natVal (Proxy :: Proxy (ItemsRequired cs))) a
+    Grid ff <*> Grid fa = Grid (ff <*> fa)
 
-instance (Functor f, Traversable f) => Traversable (Grid c is f) where
-  traverse f (EmptyGrid a) = EmptyGrid <$> f a
-  traverse f (GridLayer l) = GridLayer <$> traverse (traverse f) l
+splitToGroups ::
+       (L.ListLike (f a) a, L.ListLike (f (f a)) (f a)) => Int -> f a -> f (f a)
+splitToGroups n xs
+    | L.length xs > n = L.take n xs `L.cons` splitToGroups n (L.drop n xs)
+    | otherwise = L.singleton xs
 
-
-instance (SingI is, S.ListLikeF f, HasOrdinal nat) =>
-         Applicative (Grid c (is :: [nat]) f) where
-  pure a =
-    let pureHelper ::
-             forall c f ns a. (S.ListLikeF f, SingI ns, HasOrdinal nat)
-          => Sing (ns :: [nat])
-          -> a
-          -> Grid c ns f a
-        pureHelper SNil a = EmptyGrid a
-        pureHelper (SCons sHead (sTail :: Sing xs)) a =
-          S.withListLikeF (Proxy :: Proxy (f (Grid c xs f a))) $
-          GridLayer $
-          S.replicate sHead $ withSingI sTail $ withSing $ \s -> pureHelper s a
-    in withSing $ \s -> pureHelper s a
-  (<*>) :: Grid c is f (a -> b) -> Grid c is f a -> Grid c is f b
-  fl <*> al =
-    let helper ::
-             forall a b xs. SingI xs
-          => Grid c xs f (a -> b)
-          -> Grid c xs f a
-          -> Grid c xs f b
-        helper (EmptyGrid f) (EmptyGrid a) = EmptyGrid $ f a
-        helper (GridLayer fl) (GridLayer al) =
-          case (sing :: Sing xs) of
-            SCons (sHead :: Sing y) (sTail :: Sing ys) ->
-              S.withListLikeF (Proxy :: Proxy (f (Grid c ys f a))) $
-              S.withListLikeF (Proxy :: Proxy (f (Grid c ys f (a -> b)))) $
-              S.withListLikeF (Proxy :: Proxy (f (Grid c ys f b))) $
-              withSingI sTail $ GridLayer $ S.zipWithSame (<*>) fl al
-    in helper fl al
+addCoord ::
+       forall cs f a.
+       ( Functor f
+       , SingI cs
+       , AllAmountPossibleKnowNat cs
+       , ListLikeF f
+       , All IsCoord cs
+       )
+    => Grid cs f a
+    -> Grid cs f (Coord cs, a)
+addCoord (Grid grid) =
+    case (sing :: Sing cs) of
+        S.SNil -> (EmptyCoord, ) <$> Grid grid
+        S.SCons (shead :: Sing n) (stail :: Sing ns) ->
+            let nVal =
+                    fromIntegral $
+                    demote $ Monomorphic (sing :: Sing (AmountPossible n))
+                a :: f (f (Coord ns, a)) =
+                    (\g ->
+                         unGrid $
+                         withSingI stail $ addCoord (Grid g :: Grid ns f a)) <$>
+                    (withListLikeF (Proxy :: Proxy (f (f a))) $
+                     withListLikeF (Proxy :: Proxy (f a)) $
+                     splitToGroups nVal grid)
+                b :: f (f (Coord cs, a)) =
+                    withListLikeF (Proxy :: Proxy (f (f (Coord ns, a)))) $
+                    withListLikeF (Proxy :: Proxy (f (f (Coord cs, a)))) $
+                    withListLikeF (Proxy :: Proxy (f n)) $
+                    L.zipWith
+                        (\(c :: n) (g :: f (Coord ns, a)) ->
+                             (over _1 (AddCoord c)) <$> g)
+                        (allPossible :: f n)
+                        a
+                c :: f (Coord cs, a) =
+                    withListLikeF (Proxy :: Proxy (f (Coord cs, a))) $
+                    withListLikeF (Proxy :: Proxy (f (f (Coord cs, a)))) $
+                    L.concat b
+            in Grid $ c
