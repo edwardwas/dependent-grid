@@ -23,11 +23,15 @@ import           DependentGrid.Coord
 import           DependentGrid.Coord.Periodic
 
 import           Control.Applicative
-import           Control.Lens
+import           Control.Lens                 hiding (index)
 import           Control.Monad.Zip
+import           Data.AffineSpace
 import           Data.Constraint
 import           Data.Constraint.Forall
+import           Data.Distributive
+import           Data.Foldable
 import           Data.Functor.Classes
+import           Data.Functor.Rep
 import           Data.Kind                    (Type)
 import qualified Data.ListLike                as L
 import           Data.Maybe                   (fromJust)
@@ -70,6 +74,15 @@ data Grid (cs :: [Type]) f a where
   EmptyGrid :: a -> Grid '[] f a
   AddGridLayer :: f (Grid cs f a) -> Grid (c ': cs) f a
 
+addCoordToGrid ::
+     (All IsCoord cs, MonadZip f, Unfoldable f)
+  => Grid cs f a
+  -> Grid cs f (Coord cs, a)
+addCoordToGrid (EmptyGrid a) = EmptyGrid (EmptyCoord, a)
+addCoordToGrid (AddGridLayer gl) =
+  AddGridLayer $
+  mzipWith (\c g -> over _1 (AddCoord c) <$> addCoordToGrid g) allPossible gl
+
 instance (Foldable f, MonadZip f) => Eq1 (Grid cs f) where
   liftEq func (EmptyGrid a) (EmptyGrid b) = func a b
   liftEq func (AddGridLayer as) (AddGridLayer bs) =
@@ -95,16 +108,44 @@ instance Functor f => Functor (Grid cs f) where
   fmap f (EmptyGrid x)     = EmptyGrid (f x)
   fmap f (AddGridLayer gs) = AddGridLayer (fmap f <$> gs)
 
+instance (MonadZip f, Functor f, All IsCoord cs, Unfoldable f) =>
+         FunctorWithIndex (Coord cs) (Grid cs f) where
+  imap f (EmptyGrid x) = EmptyGrid $ f EmptyCoord x
+  imap f (AddGridLayer gs) =
+    AddGridLayer $
+    mzipWith
+      (\outer g -> imap (\inner -> f (AddCoord outer inner)) g)
+      allPossible
+      gs
+
 instance Foldable f => Foldable (Grid cs f) where
   foldMap f (EmptyGrid x)     = f x
   foldMap f (AddGridLayer gs) = foldMap (foldMap f) gs
+
+instance (Unfoldable f, MonadZip f, Foldable f, All IsCoord cs) =>
+         FoldableWithIndex (Coord cs) (Grid cs f) where
+  ifoldMap f (EmptyGrid x) = f EmptyCoord x
+  ifoldMap f (AddGridLayer gs) =
+    foldMap id $
+    mzipWith
+      (\outer -> ifoldMap (\inner -> f (AddCoord outer inner)))
+      allPossible
+      gs
 
 instance Traversable f => Traversable (Grid cs f) where
   traverse f (EmptyGrid x)     = EmptyGrid <$> f x
   traverse f (AddGridLayer gs) = AddGridLayer <$> traverse (traverse f) gs
 
-makeSized :: (Unfoldable f, Ord a, Num a) => a -> x -> Maybe (f x)
-makeSized x a = unfoldr (\n -> if n > 0 then Just (a,n - 1) else Nothing) x
+instance (All IsCoord cs, Traversable f, MonadZip f, Unfoldable f) =>
+         TraversableWithIndex (Coord cs) (Grid cs f) where
+  itraverse f (EmptyGrid x) = EmptyGrid <$> f EmptyCoord x
+  itraverse f (AddGridLayer gs) =
+    AddGridLayer <$>
+    sequenceA
+      (mzipWith
+         (\outer -> itraverse (\inner -> f (AddCoord outer inner)))
+         allPossible
+         gs)
 
 instance (AllAmountPossibleKnowNat cs, SingI cs, Applicative f, MonadZip f, Unfoldable f) =>
          Applicative (Grid cs f) where
@@ -119,3 +160,23 @@ instance (AllAmountPossibleKnowNat cs, SingI cs, Applicative f, MonadZip f, Unfo
   EmptyGrid f <*> EmptyGrid a = EmptyGrid (f a)
   AddGridLayer fs <*> AddGridLayer as = case (sing :: Sing cs) of
       S.SCons _ stail -> withSingI stail $ AddGridLayer (mzipWith (<*>) fs as)
+
+instance (All IsCoord cs, SingI cs, Unfoldable f, Foldable f, Functor f) =>
+         Distributive (Grid cs f) where
+  distribute = distributeRep
+
+instance (All IsCoord cs, SingI cs, Functor f, Unfoldable f, Foldable f) =>
+         Representable (Grid cs f) where
+  type Rep (Grid cs f) = Coord cs
+  tabulate f =
+    case (sing :: Sing cs) of
+      S.SNil -> EmptyGrid $ f EmptyCoord
+      S.SCons shead stail ->
+        withSingI stail $
+        AddGridLayer $
+        (\c -> tabulate (\c' -> f (AddCoord c c'))) <$> allPossible
+  index (EmptyGrid a) EmptyCoord = a
+  index (AddGridLayer gl) (AddCoord c cs) =
+    case (sing :: Sing cs) of
+      S.SCons _ stail ->
+        withSingI stail $ index (head $ drop (coordAsInt c) $ toList gl) cs

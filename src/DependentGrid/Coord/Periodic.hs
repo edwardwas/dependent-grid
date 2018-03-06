@@ -107,6 +107,10 @@ data instance Sing (Periodic n) = SPeriodic (Sing n)
 instance SingI n => SingI (Periodic n) where
   sing = SPeriodic (sing :: Sing n)
 
-instance (SingI (n :: nat), HasOrdinal nat) => IsCoord (Periodic n) where
-    type AmountPossible (Periodic n) = AsNat n
-    allPossible = undefined
+instance ( MonomorphicRep (Sing :: nat -> Type) ~ int
+         , SingI (n :: nat)
+         , HasOrdinal nat
+         , AdditiveGroup int
+         ) =>
+         IsCoord (Periodic n) where
+  type AmountPossible (Periodic n) = AsNat n
