@@ -214,22 +214,3 @@ instance ( AllAmountPossibleKnowNat cs
         AddGridLayer <$>
         AddGridLayer (sequenceA <$> duplicate (duplicate <$> gl))
 
-overGridLayer ::
-     forall n cs f a. (SingI (AsPeano n), Functor f, IsTypeNum nat)
-  => Proxy (n :: nat)
-  -> (forall x. f x -> f x)
-  -> Grid cs f a
-  -> Grid cs f a
-overGridLayer _ f gs =
-  case (sing :: Sing (AsPeano n), gs) of
-    (Peano.SZ, AddGridLayer as) -> AddGridLayer (f as)
-    (Peano.SS (n :: Sing m), AddGridLayer as) ->
-      withSingI n $ AddGridLayer (overGridLayer (Proxy :: Proxy m) f <$> as)
-
-overAllLayers :: Traversable f => (forall x . f x -> f x) -> Grid cs f a -> [ Grid cs f a ]
-overAllLayers _ (EmptyGrid a)     = pure (EmptyGrid a)
-overAllLayers f (AddGridLayer gl) =
-  map
-    AddGridLayer
-    (traverse (overAllLayers id) (f gl) ++ traverse (overAllLayers f) gl)
-
