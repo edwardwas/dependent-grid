@@ -30,11 +30,13 @@ import           Data.Constraint.Forall
 import           Data.Functor.Classes
 import           Data.Kind                    (Type)
 import qualified Data.ListLike                as L
+import           Data.Maybe                   (fromJust)
 import           Data.Proxy                   (Proxy (..))
 import           Data.Singletons
 import qualified Data.Singletons.Prelude.List as S
 import           Data.Type.Monomorphic
 import           Data.Type.Ordinal
+import           Data.Unfoldable
 import           Debug.Trace
 import           Generics.SOP                 (All)
 import qualified GHC.TypeLits                 as GHC
@@ -101,14 +103,17 @@ instance Traversable f => Traversable (Grid cs f) where
   traverse f (EmptyGrid x)     = EmptyGrid <$> f x
   traverse f (AddGridLayer gs) = AddGridLayer <$> traverse (traverse f) gs
 
-instance (AllAmountPossibleKnowNat cs, SingI cs, Applicative f, GenerateSized f, MonadZip f) =>
+makeSized :: (Unfoldable f, Ord a, Num a) => a -> x -> Maybe (f x)
+makeSized x a = unfoldr (\n -> if n > 0 then Just (a,n - 1) else Nothing) x
+
+instance (AllAmountPossibleKnowNat cs, SingI cs, Applicative f, MonadZip f, Unfoldable f) =>
          Applicative (Grid cs f) where
   pure a =
     case (sing :: Sing cs) of
       S.SNil -> EmptyGrid a
       S.SCons (shead :: Sing n) (stail :: Sing ns) ->
         AddGridLayer $
-        makeSized
+        fromJust $ makeSized
           (fromIntegral $ GHC.natVal (Proxy :: Proxy (AmountPossible n))) $
         withSingI stail $ pure a
   EmptyGrid f <*> EmptyGrid a = EmptyGrid (f a)

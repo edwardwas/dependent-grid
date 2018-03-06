@@ -109,4 +109,4 @@ instance SingI n => SingI (Periodic n) where
 
 instance (SingI (n :: nat), HasOrdinal nat) => IsCoord (Periodic n) where
     type AmountPossible (Periodic n) = AsNat n
-    allPossible = L.fromList [minBound .. maxBound]
+    allPossible = undefined
