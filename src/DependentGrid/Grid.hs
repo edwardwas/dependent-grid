@@ -23,6 +23,7 @@ import           DependentGrid.Coord
 import           DependentGrid.Coord.Periodic
 
 import           Control.Applicative
+import           Control.Comonad
 import           Control.Lens                 hiding (index)
 import           Control.Monad.Zip
 import           Data.AffineSpace
@@ -33,6 +34,7 @@ import           Data.Foldable
 import           Data.Functor.Classes
 import           Data.Functor.Rep
 import           Data.Kind                    (Type)
+import qualified Data.List.NonEmpty           as NE
 import qualified Data.ListLike                as L
 import           Data.Maybe                   (fromJust)
 import           Data.Proxy                   (Proxy (..))
@@ -180,3 +182,23 @@ instance (All IsCoord cs, SingI cs, Functor f, Unfoldable f, Foldable f) =>
     case (sing :: Sing cs) of
       S.SCons _ stail ->
         withSingI stail $ index (head $ drop (coordAsInt c) $ toList gl) cs
+
+instance ( AllAmountPossibleKnowNat cs
+         , Comonad f
+         , Traversable f
+         , SingI cs
+         , MonadZip f
+         , Unfoldable f
+         ) =>
+         Comonad (Grid cs f) where
+  extract (EmptyGrid a) = a
+  extract (AddGridLayer gl) =
+    case (sing :: Sing cs) of
+      S.SCons _ stail -> withSingI stail $ extract $ extract gl
+  duplicate (EmptyGrid a) = EmptyGrid (EmptyGrid a)
+  duplicate (AddGridLayer gl) =
+    case (sing :: Sing cs) of
+      S.SCons shead stail ->
+        withSingI stail $
+        AddGridLayer <$>
+        AddGridLayer (sequenceA <$> duplicate (duplicate <$> gl))
