@@ -25,6 +25,8 @@ import           DependentGrid.Orphans
 import           Control.Lens                       hiding (from, to, (%~))
 import           Control.Monad.Identity             (Identity (..))
 import           Data.AdditiveGroup
+import           Data.Aeson
+import           Data.Aeson.Types                   (Parser)
 import           Data.AffineSpace
 import           Data.Constraint
 import           Data.Group
@@ -42,6 +44,7 @@ import qualified Data.Singletons.TypeLits           as S
 import qualified Data.Type.Natural                  as Nat
 import           Data.Type.Natural.Class.Arithmetic
 import           Data.Type.Ordinal
+import qualified Data.Vector                        as V
 import           Generics.SOP                       hiding (SCons, SNil,
                                                      Sing (..), SingI, sing)
 import qualified GHC.TypeLits                       as GHC
@@ -76,6 +79,23 @@ instance (x ~ IndexList (AsPeano 2) xs) => Field3 (Coord xs) (Coord xs) x x wher
 
 instance (x ~ IndexList (AsPeano 3) xs) => Field4 (Coord xs) (Coord xs) x x where
     _4 = certIxCoord (Proxy @3)
+
+instance All ToJSON cs => ToJSON (Coord cs) where
+  toJSON gl =
+    let helper :: All ToJSON xs => Coord xs -> [Value]
+        helper EmptyCoord      = []
+        helper (AddCoord c cs) = toJSON c : helper cs
+    in Array $ V.fromList $ helper gl
+
+instance (SingI cs, All FromJSON cs) => FromJSON (Coord cs) where
+  parseJSON (Array a) = do
+      let helper :: forall xs . (All FromJSON xs, SingI xs) => [Value] -> Parser (Coord xs)
+          helper vs = case (sing :: Sing xs, vs) of
+              (S.SNil, [])                    -> return EmptyCoord
+              (S.SCons shead stail, (y : ys)) -> AddCoord <$> parseJSON y <*> withSingI stail (helper ys)
+              _ -> fail "Incorrect number of elements"
+      helper $ V.toList a
+  parseJSON _ = fail "Not array"
 
 instance All Eq xs => Eq (Coord xs) where
   EmptyCoord == EmptyCoord = True
