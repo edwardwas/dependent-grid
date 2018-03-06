@@ -38,3 +38,9 @@ instance IsTypeNum Peano.Nat where
 class IsCoord x where
   type AmountPossible x :: GHC.Nat
   allPossible :: L.ListLike (f x) x => f x
+
+class GenerateSized f where
+  makeSized :: Int -> a -> f a
+
+instance GenerateSized [] where
+  makeSized = replicate
