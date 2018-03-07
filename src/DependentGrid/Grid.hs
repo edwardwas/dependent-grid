@@ -1,20 +1,21 @@
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveTraversable     #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE InstanceSigs          #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeInType            #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveTraversable          #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE InstanceSigs               #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE PolyKinds                  #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeInType                 #-}
+{-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE UndecidableInstances       #-}
 
 module DependentGrid.Grid where
 
@@ -24,7 +25,10 @@ import           DependentGrid.Coord.Periodic
 
 import           Control.Applicative
 import           Control.Comonad
-import           Control.Lens                 hiding (index)
+import           Control.Comonad.Hoist.Class
+import           Control.Comonad.Representable.Store
+import           Control.Comonad.Trans.Class
+import           Control.Lens                        hiding (index)
 import           Control.Monad.Zip
 import           Data.AffineSpace
 import           Data.Constraint
@@ -33,38 +37,23 @@ import           Data.Distributive
 import           Data.Foldable
 import           Data.Functor.Classes
 import           Data.Functor.Rep
-import           Data.Kind                    (Type)
-import           Data.List                    (sort)
-import qualified Data.List.NonEmpty           as NE
-import qualified Data.ListLike                as L
-import           Data.Maybe                   (fromJust)
-import           Data.Proxy                   (Proxy (..))
+import           Data.Kind                           (Type)
+import           Data.List                           (sort)
+import qualified Data.List.NonEmpty                  as NE
+import qualified Data.ListLike                       as L
+import           Data.Maybe                          (fromJust)
+import           Data.Proxy                          (Proxy (..))
 import           Data.Singletons
-import qualified Data.Singletons.Prelude.List as S
+import qualified Data.Singletons.Prelude.List        as S
 import           Data.Type.Monomorphic
-import qualified Data.Type.Natural            as Peano
+import qualified Data.Type.Natural                   as Peano
 import           Data.Type.Ordinal
 import           Data.Unfoldable
-import qualified Data.Vector                  as V
+import qualified Data.Vector                         as V
 import           Debug.Trace
-import           Generics.SOP                 (All)
-import qualified GHC.TypeLits                 as GHC
-import           Unsafe.Coerce                (unsafeCoerce)
-
-class (L.ListLike (f a) a) => LLF f a
-instance (L.ListLike (f a) a) => LLF f a
-
-type ListLikeF f = Forall (LLF f)
-
-withListLikeF ::
-       forall proxy f a b. ListLikeF f
-    => proxy (f a)
-    -> (L.ListLike (f a) a =>
-            b)
-    -> b
-withListLikeF _ b = b \\ entail
-  where
-    entail = inst :: ListLikeF f :- LLF f a
+import           Generics.SOP                        (All)
+import qualified GHC.TypeLits                        as GHC
+import           Unsafe.Coerce                       (unsafeCoerce)
 
 type family ItemsRequired xs where
   ItemsRequired '[] = 1
@@ -194,23 +183,66 @@ instance (All IsCoord cs, SingI cs, Functor f, Unfoldable f, Foldable f) =>
       S.SCons _ stail ->
         withSingI stail $ index (head $ drop (coordAsInt c) $ toList gl) cs
 
-instance ( AllAmountPossibleKnowNat cs
-         , Comonad f
-         , Traversable f
-         , SingI cs
-         , MonadZip f
-         , Unfoldable f
-         ) =>
-         Comonad (Grid cs f) where
-  extract (EmptyGrid a) = a
-  extract (AddGridLayer gl) =
-    case (sing :: Sing cs) of
-      S.SCons _ stail -> withSingI stail $ extract $ extract gl
-  duplicate (EmptyGrid a) = EmptyGrid (EmptyGrid a)
-  duplicate (AddGridLayer gl) =
-    case (sing :: Sing cs) of
-      S.SCons shead stail ->
-        withSingI stail $
-        AddGridLayer <$>
-        AddGridLayer (sequenceA <$> duplicate (duplicate <$> gl))
+type family AllGridLayersIndex cs f a i where
+    AllGridLayersIndex '[] f a i = Index (f a) ~ i
+    AllGridLayersIndex (c ': cs) f a i = ( Index (f (Grid cs f a)) ~ i
+                                         , IxValue (f (Grid cs f a)) ~ Grid cs f a
+                                         , Ixed (f (Grid cs f a))
+                                         , AllGridLayersIndex cs f a i)
 
+gridIndexed ::
+       (All IsCoord cs, AllGridLayersIndex cs f a Int)
+    => Coord cs
+    -> Lens' (Grid cs f a) a
+gridIndexed EmptyCoord f (EmptyGrid a) = EmptyGrid <$> f a
+gridIndexed (AddCoord c cs) f (AddGridLayer gl) =
+    AddGridLayer <$> singular (ix (coordAsInt c)) (\g -> gridIndexed cs f g) gl
+
+newtype FocusedGridT cs f w a = FocusedGridT {unFocusedGrid :: StoreT (Grid cs f) w a}
+  deriving (Functor,Applicative,ComonadTrans,ComonadHoist)
+
+type FocusedGrid cs f a = FocusedGridT cs f Identity a
+
+instance ( Functor f
+         , Comonad w
+         , All IsCoord cs
+         , SingI cs
+         , Unfoldable f
+         , Foldable f
+         ) =>
+         Comonad (FocusedGridT cs f w) where
+    extract (FocusedGridT sg) = extract sg
+    duplicate (FocusedGridT sg) = FocusedGridT (FocusedGridT <$> duplicate sg)
+
+instance ( Comonad w
+         , Functor f
+         , Foldable f
+         , Unfoldable f
+         , SingI cs
+         , All IsCoord cs
+         ) =>
+         ComonadStore (Coord cs) (FocusedGridT cs f w) where
+    pos (FocusedGridT sg) = pos sg
+    peek c (FocusedGridT sg) = peek c sg
+
+focusGridT :: Lens' (FocusedGridT cs f w a) (w (Grid cs f a))
+focusGridT f (FocusedGridT (StoreT grid pos)) =
+    (\grid' -> FocusedGridT $ StoreT grid' pos) <$> f grid
+
+focusGrid ::
+       (Applicative w, Comonad w) => Lens' (FocusedGridT cs f w a) (Grid cs f a)
+focusGrid = focusGridT . iso extract pure
+
+makeFocusGrid ::
+       (All Monoid cs, Applicative w, SingI cs)
+    => Grid cs f a
+    -> FocusedGridT cs f w a
+makeFocusGrid g = FocusedGridT $ StoreT (pure g) mempty
+
+type family CollapsedGrid cs f a where
+  CollapsedGrid '[] _ a = a
+  CollapsedGrid (c ': cs) f a = f (CollapsedGrid cs f a)
+
+collapseGrid :: Functor f => Grid cs f a -> CollapsedGrid cs f a
+collapseGrid (EmptyGrid a)     = a
+collapseGrid (AddGridLayer gs) = collapseGrid <$> gs

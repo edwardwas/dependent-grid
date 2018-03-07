@@ -5,6 +5,7 @@
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE InstanceSigs           #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE ParallelListComp       #-}
 {-# LANGUAGE PolyKinds              #-}
 {-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
@@ -180,3 +181,32 @@ instance ( IsProductType (DiffCoord xs) (MapDiff xs)
                 case from x of
                     SOP (Z n) -> n
         in addHelper a (helper b)
+
+mooreNeighborhood ::
+       (AllDiffEq cs i, All AffineSpace cs, Num i, Enum i)
+    => i
+    -> Coord cs
+    -> [Coord cs]
+mooreNeighborhood _ EmptyCoord = [EmptyCoord]
+mooreNeighborhood i (AddCoord c cs) = do
+    dcs <- mooreNeighborhood i cs
+    dc <- [-i .. i]
+    return $ AddCoord (c .+^ dc) dcs
+
+type family AllDiffEq cs i :: Constraint where
+  AllDiffEq '[] i = ()
+  AllDiffEq (c ': cs) i = (Diff c ~ i, AllDiffEq cs i)
+
+manhattenDistance ::
+       (Num i, AllDiffEq cs i, All AffineSpace cs) => Coord cs -> Coord cs -> i
+manhattenDistance EmptyCoord EmptyCoord = 0
+manhattenDistance (AddCoord a as) (AddCoord b bs) =
+    abs (a .-. b) + manhattenDistance as bs
+
+vonNeumanNeighbourhood ::
+       (AllDiffEq cs i, All AffineSpace cs, Num i, Enum i, Ord i)
+    => i
+    -> Coord cs
+    -> [Coord cs]
+vonNeumanNeighbourhood r c =
+    filter (\c' -> manhattenDistance c c' <= r) $ mooreNeighborhood r c
