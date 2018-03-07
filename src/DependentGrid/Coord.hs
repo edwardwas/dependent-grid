@@ -32,6 +32,7 @@ import           Data.AffineSpace
 import           Data.Constraint
 import           Data.Group
 import           Data.Kind                          (Type)
+import           Data.List
 import           Data.List                          (intercalate)
 import           Data.Promotion.Prelude.List        ((:!!))
 import           Data.Semigroup                     (Semigroup (..))
@@ -101,6 +102,10 @@ instance (SingI cs, All FromJSON cs) => FromJSON (Coord cs) where
 instance All Eq xs => Eq (Coord xs) where
   EmptyCoord == EmptyCoord = True
   AddCoord a as == AddCoord b bs = a == b && as == bs
+
+instance (All Eq cs, All Ord cs) => Ord (Coord cs) where
+  compare EmptyCoord EmptyCoord           = EQ
+  compare (AddCoord a as) (AddCoord b bs) = compare a b <> compare as bs
 
 instance All Show xs => Show (Coord xs) where
     show c =
@@ -182,13 +187,17 @@ instance ( IsProductType (DiffCoord xs) (MapDiff xs)
                     SOP (Z n) -> n
         in addHelper a (helper b)
 
+type family AllCoord c xs :: Constraint where
+  AllCoord _ '[] = ()
+  AllCoord c (x ': xs) = (c (Coord (x ': xs)), AllCoord c xs)
+
 mooreNeighborhood ::
-       (AllDiffEq cs i, All AffineSpace cs, Num i, Enum i)
+       (AllDiffEq cs i, All AffineSpace cs, Num i, Enum i, All Ord cs, All Eq cs)
     => i
     -> Coord cs
     -> [Coord cs]
 mooreNeighborhood _ EmptyCoord = [EmptyCoord]
-mooreNeighborhood i (AddCoord c cs) = do
+mooreNeighborhood i (AddCoord c cs) = nub $ sort $ do
     dcs <- mooreNeighborhood i cs
     dc <- [-i .. i]
     return $ AddCoord (c .+^ dc) dcs
@@ -204,9 +213,13 @@ manhattenDistance (AddCoord a as) (AddCoord b bs) =
     abs (a .-. b) + manhattenDistance as bs
 
 vonNeumanNeighbourhood ::
-       (AllDiffEq cs i, All AffineSpace cs, Num i, Enum i, Ord i)
+       (AllDiffEq cs i, All AffineSpace cs, Num i, Enum i, Ord i, All Eq cs, All Ord cs)
     => i
     -> Coord cs
     -> [Coord cs]
 vonNeumanNeighbourhood r c =
     filter (\c' -> manhattenDistance c c' <= r) $ mooreNeighborhood r c
+
+coordAsList :: All IsCoord cs => Coord cs -> [Int]
+coordAsList  EmptyCoord     = []
+coordAsList (AddCoord a as) = coordAsInt a : coordAsList as

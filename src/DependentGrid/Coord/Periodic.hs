@@ -33,7 +33,6 @@ import           GHC.TypeLits
 
 newtype Periodic (n :: nat) = Periodic {unPeriodic :: Ordinal n}
 
-
 deriving instance HasOrdinal nat => Eq (Periodic (n :: nat))
 deriving instance (SingI n, HasOrdinal nat) => Show (Periodic (n :: nat))
 deriving instance (HasOrdinal nat) => Ord (Periodic (n :: nat))

@@ -18,6 +18,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:     
         DependentGrid.Coord.Periodic
+        , DependentGrid.Coord.HardWrap
         , DependentGrid.Coord
         , DependentGrid.Grid
         , DependentGrid.Orphans
@@ -46,3 +47,33 @@ library
     , vector
   hs-source-dirs:      src
   default-language:    Haskell2010
+
+executable example
+  build-depends:       base >=4.8 && <4.11
+    , dependent-grid
+    , lens
+    , sized
+    , type-natural
+    , singletons
+    , monomorphic
+    , groups
+    , vector-space
+    , aeson
+    , ListLike
+    , constraints
+    , type-combinators
+    , generics-sop
+    , mtl
+    , comonad
+    , unfoldable
+    , distributive
+    , adjunctions
+    , vector
+    , MonadRandom
+    , random
+    , Rasterific
+    , JuicyPixels
+  main-is: Main.hs
+  hs-source-dirs:      app
+  default-language:    Haskell2010
+  ghc-options: -O2 -threaded
