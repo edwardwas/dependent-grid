@@ -23,7 +23,6 @@ import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Group
 import           Data.Kind
-import qualified Data.ListLike                 as L
 import           Data.Semigroup
 import           Data.Singletons.TH
 import           Data.Type.Monomorphic

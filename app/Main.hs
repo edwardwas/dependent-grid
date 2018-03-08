@@ -18,7 +18,6 @@ import           Control.Lens
 import           Control.Monad.Random
 import           Data.AffineSpace
 import           Data.Singletons
-import           Data.Unfoldable
 import qualified Data.Vector                  as V
 import           Graphics.Rasterific
 import           Graphics.Rasterific.Texture
@@ -39,8 +38,8 @@ rule30 [On, Off, On]   = Off
 rule30 [Off, Off, Off] = Off
 rule30 _               = On
 
-type World = Grid '[Periodic 100] V.Vector
-type FocusedWorld a = FocusedGrid '[Periodic 100] V.Vector a
+type World = Grid '[Periodic 100] []
+type FocusedWorld a = FocusedGrid '[Periodic 100] [] a
 
 randomWorld :: MonadRandom m => m (World CellState)
 randomWorld = sequenceA $ pure (cellStateFromBool <$> getRandom)
@@ -57,7 +56,7 @@ displayWorld :: FocusedWorld CellState -> String
 displayWorld =
     let helper On  = '#'
         helper Off = '.'
-    in V.toList . collapseGrid . view focusGrid . fmap helper
+    in collapseGrid . view focusGrid . fmap helper
 
 run :: Int -> World CellState -> [World CellState]
 run n =
@@ -82,4 +81,4 @@ makeImage =
     withTexture (uniformTexture $ PixelRGBA8 255 0 0 255) .
     mconcat . zipWith (drawRow (DrawInfo 1)) [0 ..]
 
-main = makeImage $ run 400 startCenter
+main = makeImage $ run 100 startCenter

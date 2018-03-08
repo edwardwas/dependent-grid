@@ -8,6 +8,9 @@ let
           dependent-grid = callCabal2nix "dependent-grid" ./. {};
           ghc = super.ghc // {withPackages = super.ghc.withHoogle;};
           ghcWithPackages = self.ghc.withPackages;
+          mkDerivation = args: super.mkDerivation (args // {
+            enableLibraryProfiling = true;
+          });
         };
       };
     };

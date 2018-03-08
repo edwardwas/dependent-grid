@@ -28,46 +28,56 @@ library
   -- other-extensions:    
   build-depends:       base >=4.8 && <4.11
     , lens
-    , sized
     , type-natural
     , singletons
     , monomorphic
     , groups
     , vector-space
     , aeson
-    , ListLike
-    , constraints
-    , type-combinators
     , generics-sop
     , mtl
     , comonad
-    , unfoldable
     , distributive
     , adjunctions
     , vector
   hs-source-dirs:      src
   default-language:    Haskell2010
+  ghc-options: -fprof-auto
 
-executable example
+test-suite tests
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs:    tests
+  other-modules:       Test.Util
+    , Test.Coord.Periodic
+  default-language:    Haskell2010
   build-depends:       base >=4.8 && <4.11
-    , dependent-grid
     , lens
-    , sized
     , type-natural
     , singletons
     , monomorphic
     , groups
     , vector-space
     , aeson
-    , ListLike
-    , constraints
-    , type-combinators
     , generics-sop
     , mtl
     , comonad
-    , unfoldable
     , distributive
     , adjunctions
+    , vector
+    , hedgehog
+    , tasty
+    , tasty-hedgehog
+    , dependent-grid
+  ghc-options: -O0
+
+executable example
+  build-depends:       base >=4.8 && <4.11
+    , dependent-grid
+    , lens
+    , singletons
+    , vector-space
+    , comonad
     , vector
     , MonadRandom
     , random
@@ -76,4 +86,4 @@ executable example
   main-is: Main.hs
   hs-source-dirs:      app
   default-language:    Haskell2010
-  ghc-options: -O2 -threaded
+  ghc-options: -O2 -threaded -fprof-auto

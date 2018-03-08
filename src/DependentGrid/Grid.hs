@@ -31,8 +31,6 @@ import           Control.Comonad.Trans.Class
 import           Control.Lens                        hiding (index)
 import           Control.Monad.Zip
 import           Data.AffineSpace
-import           Data.Constraint
-import           Data.Constraint.Forall
 import           Data.Distributive
 import           Data.Foldable
 import           Data.Functor.Classes
@@ -40,7 +38,6 @@ import           Data.Functor.Rep
 import           Data.Kind                           (Type)
 import           Data.List                           (sort)
 import qualified Data.List.NonEmpty                  as NE
-import qualified Data.ListLike                       as L
 import           Data.Maybe                          (fromJust)
 import           Data.Proxy                          (Proxy (..))
 import           Data.Singletons
@@ -48,10 +45,10 @@ import qualified Data.Singletons.Prelude.List        as S
 import           Data.Type.Monomorphic
 import qualified Data.Type.Natural                   as Peano
 import           Data.Type.Ordinal
-import           Data.Unfoldable
 import qualified Data.Vector                         as V
 import           Debug.Trace
 import           Generics.SOP                        (All)
+import           GHC.Exts                            (Constraint)
 import qualified GHC.TypeLits                        as GHC
 import           Unsafe.Coerce                       (unsafeCoerce)
 
@@ -69,7 +66,7 @@ data Grid (cs :: [Type]) f a where
   AddGridLayer :: f (Grid cs f a) -> Grid (c ': cs) f a
 
 addCoordToGrid ::
-     (All IsCoord cs, MonadZip f, Unfoldable f)
+     (All IsCoord cs, MonadZip f, MakeSized f)
   => Grid cs f a
   -> Grid cs f (Coord cs, a)
 addCoordToGrid (EmptyGrid a) = EmptyGrid (EmptyCoord, a)
@@ -110,7 +107,7 @@ instance Functor f => Functor (Grid cs f) where
   fmap f (EmptyGrid x)     = EmptyGrid (f x)
   fmap f (AddGridLayer gs) = AddGridLayer (fmap f <$> gs)
 
-instance (MonadZip f, Functor f, All IsCoord cs, Unfoldable f) =>
+instance (MonadZip f, Functor f, All IsCoord cs, MakeSized f) =>
          FunctorWithIndex (Coord cs) (Grid cs f) where
   imap f (EmptyGrid x) = EmptyGrid $ f EmptyCoord x
   imap f (AddGridLayer gs) =
@@ -124,7 +121,7 @@ instance Foldable f => Foldable (Grid cs f) where
   foldMap f (EmptyGrid x)     = f x
   foldMap f (AddGridLayer gs) = foldMap (foldMap f) gs
 
-instance (Unfoldable f, MonadZip f, Foldable f, All IsCoord cs) =>
+instance (MonadZip f, Foldable f, All IsCoord cs, MakeSized f) =>
          FoldableWithIndex (Coord cs) (Grid cs f) where
   ifoldMap f (EmptyGrid x) = f EmptyCoord x
   ifoldMap f (AddGridLayer gs) =
@@ -138,7 +135,7 @@ instance Traversable f => Traversable (Grid cs f) where
   traverse f (EmptyGrid x)     = EmptyGrid <$> f x
   traverse f (AddGridLayer gs) = AddGridLayer <$> traverse (traverse f) gs
 
-instance (All IsCoord cs, Traversable f, MonadZip f, Unfoldable f) =>
+instance (All IsCoord cs, Traversable f, MonadZip f, MakeSized f) =>
          TraversableWithIndex (Coord cs) (Grid cs f) where
   itraverse f (EmptyGrid x) = EmptyGrid <$> f EmptyCoord x
   itraverse f (AddGridLayer gs) =
@@ -149,25 +146,32 @@ instance (All IsCoord cs, Traversable f, MonadZip f, Unfoldable f) =>
          allPossible
          gs)
 
-instance (AllAmountPossibleKnowNat cs, SingI cs, Applicative f, MonadZip f, Unfoldable f) =>
+instance ( AllAmountPossibleKnowNat cs
+         , SingI cs
+         , Applicative f
+         , MonadZip f
+         , MakeSized f
+         ) =>
          Applicative (Grid cs f) where
-  pure a =
-    case (sing :: Sing cs) of
-      S.SNil -> EmptyGrid a
-      S.SCons (shead :: Sing n) (stail :: Sing ns) ->
-        AddGridLayer $
-        fromJust $ makeSized
-          (fromIntegral $ GHC.natVal (Proxy :: Proxy (AmountPossible n))) $
-        withSingI stail $ pure a
-  EmptyGrid f <*> EmptyGrid a = EmptyGrid (f a)
-  AddGridLayer fs <*> AddGridLayer as = case (sing :: Sing cs) of
-      S.SCons _ stail -> withSingI stail $ AddGridLayer (mzipWith (<*>) fs as)
+    pure a =
+        case (sing :: Sing cs) of
+            S.SNil -> EmptyGrid a
+            S.SCons (shead :: Sing n) (stail :: Sing ns) ->
+                AddGridLayer $
+                makeSized
+                    (fromIntegral $ GHC.natVal (Proxy :: Proxy (AmountPossible n))) $
+                withSingI stail $ pure a
+    EmptyGrid f <*> EmptyGrid a = EmptyGrid (f a)
+    AddGridLayer fs <*> AddGridLayer as =
+        case (sing :: Sing cs) of
+            S.SCons _ stail ->
+                withSingI stail $ AddGridLayer (mzipWith (<*>) fs as)
 
-instance (All IsCoord cs, SingI cs, Unfoldable f, Foldable f, Functor f) =>
+instance (All IsCoord cs, SingI cs, Foldable f, Functor f, MakeSized f) =>
          Distributive (Grid cs f) where
   distribute = distributeRep
 
-instance (All IsCoord cs, SingI cs, Functor f, Unfoldable f, Foldable f) =>
+instance (All IsCoord cs, SingI cs, Functor f, Foldable f, MakeSized f) =>
          Representable (Grid cs f) where
   type Rep (Grid cs f) = Coord cs
   tabulate f =
@@ -207,8 +211,8 @@ instance ( Functor f
          , Comonad w
          , All IsCoord cs
          , SingI cs
-         , Unfoldable f
          , Foldable f
+         , MakeSized f
          ) =>
          Comonad (FocusedGridT cs f w) where
     extract (FocusedGridT sg) = extract sg
@@ -217,9 +221,9 @@ instance ( Functor f
 instance ( Comonad w
          , Functor f
          , Foldable f
-         , Unfoldable f
          , SingI cs
          , All IsCoord cs
+         , MakeSized f
          ) =>
          ComonadStore (Coord cs) (FocusedGridT cs f w) where
     pos (FocusedGridT sg) = pos sg

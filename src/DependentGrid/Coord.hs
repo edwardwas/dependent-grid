@@ -29,7 +29,6 @@ import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.Aeson.Types                   (Parser)
 import           Data.AffineSpace
-import           Data.Constraint
 import           Data.Group
 import           Data.Kind                          (Type)
 import           Data.List
@@ -49,6 +48,7 @@ import           Data.Type.Ordinal
 import qualified Data.Vector                        as V
 import           Generics.SOP                       hiding (SCons, SNil,
                                                      Sing (..), SingI, sing)
+import           GHC.Exts                           (Constraint)
 import qualified GHC.TypeLits                       as GHC
 
 type family IndexList n xs where
