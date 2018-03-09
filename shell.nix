@@ -1,2 +1,2 @@
-{compiler ? "default"}:
-(import ./default.nix {inherit compiler;}).env
+{compiler ? "default", profiling ? false}:
+(import ./default.nix {inherit compiler profiling;}).env
