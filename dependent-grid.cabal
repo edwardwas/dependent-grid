@@ -19,6 +19,7 @@ library
   exposed-modules:     
         DependentGrid.Coord.Periodic
         , DependentGrid.Coord.HardWrap
+        , DependentGrid.Coord.NoOver
         , DependentGrid.Coord
         , DependentGrid.Grid
         , DependentGrid.Orphans

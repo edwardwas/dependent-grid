@@ -1,4 +1,4 @@
-{compiler ? "default", profiling ? true}:
+{compiler ? "default", profiling ? false}:
 let
   usedCompiler = if compiler == "default" then "ghc802" else compiler;
   config = {
@@ -9,7 +9,7 @@ let
           ghc = super.ghc // {withPackages = super.ghc.withHoogle;};
           ghcWithPackages = self.ghc.withPackages;
           mkDerivation = args: super.mkDerivation (args // {
-            enableLibraryProfiling = true;
+            enableLibraryProfiling = profiling;
           });
         };
       };
