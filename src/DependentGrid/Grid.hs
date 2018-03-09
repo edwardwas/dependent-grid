@@ -218,7 +218,6 @@ instance (All IsCoord cs, MonadZip f, GetByIndex f Int, MakeSized f) =>
   pos = view focusedCoord
   peek pos fg = fg ^. focusedGrid . gridIndexed pos
 
-
 makeFocusGrid ::
        (All Monoid cs, SingI cs)
     => Grid cs f a

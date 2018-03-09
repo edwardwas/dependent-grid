@@ -192,12 +192,12 @@ type family AllCoord c xs :: Constraint where
   AllCoord c (x ': xs) = (c (Coord (x ': xs)), AllCoord c xs)
 
 mooreNeighborhood ::
-       (AllDiffEq cs i, All AffineSpace cs, Num i, Enum i, All Ord cs, All Eq cs)
+       (AllDiffEq cs i, All AffineSpace cs, Num i, Enum i)
     => i
     -> Coord cs
     -> [Coord cs]
 mooreNeighborhood _ EmptyCoord = [EmptyCoord]
-mooreNeighborhood i (AddCoord c cs) = nub $ sort $ do
+mooreNeighborhood i (AddCoord c cs) = do
     dcs <- mooreNeighborhood i cs
     dc <- [-i .. i]
     return $ AddCoord (c .+^ dc) dcs
@@ -213,7 +213,7 @@ manhattenDistance (AddCoord a as) (AddCoord b bs) =
     abs (a .-. b) + manhattenDistance as bs
 
 vonNeumanNeighbourhood ::
-       (AllDiffEq cs i, All AffineSpace cs, Num i, Enum i, Ord i, All Eq cs, All Ord cs)
+       (AllDiffEq cs i, All AffineSpace cs, Num i, Enum i, Ord i)
     => i
     -> Coord cs
     -> [Coord cs]
