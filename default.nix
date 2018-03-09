@@ -1,7 +1,7 @@
-{compiler ? "default"}:
+{compiler ? "default", profiling ? true}:
 let
   usedCompiler = if compiler == "default" then "ghc802" else compiler;
-  config = {
+  config = doProfile : {
     packageOverrides = pkgs: rec {
       haskellPackages = pkgs.haskell.packages.${usedCompiler}.override {
         overrides = self : super : rec {
@@ -9,16 +9,17 @@ let
           ghc = super.ghc // {withPackages = super.ghc.withHoogle;};
           ghcWithPackages = self.ghc.withPackages;
           mkDerivation = args: super.mkDerivation (args // {
-            enableLibraryProfiling = true;
+            enableLibraryProfiling = doProfile;
           });
         };
       };
     };
   };
 
-  pkgs = import <nixpkgs> { inherit config; };
-  callCabal2nix = pkgs.haskellPackages.callCabal2nix;
-  callHackage = pkgs.haskellPackages.callHackage;
+  pkgs = import <nixpkgs> { config = config profiling; };
+  utilPkgs = import <nixpkgs> { config = config false;};
+  callCabal2nix = utilPkgs.haskellPackages.callCabal2nix;
+  callHackage = utilPkgs.haskellPackages.callHackage;
   hLib = pkgs.haskell.lib;
 
 in
