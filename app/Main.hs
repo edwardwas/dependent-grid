@@ -38,30 +38,30 @@ rule30 [On, Off, On]   = Off
 rule30 [Off, Off, Off] = Off
 rule30 _               = On
 
-type World = Grid '[Periodic 100] []
-type FocusedWorld a = FocusedGrid '[Periodic 100] [] a
+type World = Grid '[Periodic 300] []
+type FocusedWorld a = FocusedGrid '[Periodic 300] [] a
 
 randomWorld :: MonadRandom m => m (World CellState)
 randomWorld = sequenceA $ pure (cellStateFromBool <$> getRandom)
 
 startCenter :: World CellState
-startCenter = pure Off & gridIndexed (AddCoord (Periodic 50) EmptyCoord) .~ On
+startCenter = pure Off & gridIndexed (AddCoord (Periodic 150) EmptyCoord) .~ On
 
 stepRule :: ([CellState] -> CellState) -> FocusedWorld CellState -> CellState
 stepRule rule g =
-    rule $ map (\c -> g ^. focusGrid . gridIndexed c) $ mooreNeighborhood 1 $
+    rule $ map (\c -> g ^. focusedGrid . gridIndexed c) $ mooreNeighborhood 1 $
     pos g
 
 displayWorld :: FocusedWorld CellState -> String
 displayWorld =
     let helper On  = '#'
         helper Off = '.'
-    in collapseGrid . view focusGrid . fmap helper
+    in collapseGrid . view focusedGrid . fmap helper
 
 run :: Int -> World CellState -> [World CellState]
 run n =
-    map (view focusGrid) .
-    take n . iterate (extend (stepRule rule30)) . makeFocusGrid
+    map (view focusedGrid) .
+    take n . iterate (extend $ stepRule rule30). makeFocusGrid
 
 data DrawInfo = DrawInfo {squareSize :: Float} deriving (Eq,Show)
 
@@ -74,11 +74,11 @@ drawRow DrawInfo {..} rn w =
                 squareSize
                 squareSize
         helper _ _ = mempty
-    in ifoldMap (\i a -> helper (fromIntegral <$> coordAsList i) a) w
+    in ifoldMap (helper . fmap fromIntegral . coordAsList) w
 
 makeImage =
     writePng "test.png" . renderDrawing 600 600 (PixelRGBA8 255 255 255 255) .
     withTexture (uniformTexture $ PixelRGBA8 255 0 0 255) .
-    mconcat . zipWith (drawRow (DrawInfo 1)) [0 ..]
+    mconcat . zipWith (drawRow (DrawInfo 2)) [0 ..]
 
-main = makeImage $ run 100 startCenter
+main = makeImage $ run 300 startCenter

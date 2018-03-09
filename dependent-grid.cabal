@@ -22,7 +22,6 @@ library
         , DependentGrid.Coord
         , DependentGrid.Grid
         , DependentGrid.Orphans
-        , DependentGrid.Ordinal
         , DependentGrid.Class
   -- other-modules:       
   -- other-extensions:    
@@ -50,6 +49,8 @@ test-suite tests
   hs-source-dirs:    tests
   other-modules:       Test.Util
     , Test.Coord.Periodic
+    , Test.Grid
+    , Test.Coord
   default-language:    Haskell2010
   build-depends:       base >=4.8 && <4.11
     , lens

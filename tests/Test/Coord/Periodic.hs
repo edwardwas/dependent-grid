@@ -22,4 +22,4 @@ genPeriodic =
 
 tests =
     let g :: Gen (Periodic 10) = genPeriodic
-    in testGroup "Periodic 10" [semigroupTest g, monoidTest g, groupTest g]
+    in testGroup "Periodic 10" [semigroupTest g, monoidTest g, groupTest g, additiveGroupTest g]

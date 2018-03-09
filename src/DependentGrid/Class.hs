@@ -1,16 +1,17 @@
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DefaultSignatures     #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE KindSignatures        #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE ConstraintKinds        #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE DefaultSignatures      #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE KindSignatures         #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE PolyKinds              #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE UndecidableInstances   #-}
 
 module DependentGrid.Class where
 
@@ -77,8 +78,7 @@ makeAllBounded ::
        forall f a. (Eq a, Enum a, Bounded a, MakeSized f)
     => f a
 makeAllBounded =
-    makeSizedFunc (fromEnum (maxBound :: a) - fromEnum (minBound :: a)) $ \n ->
-        toEnum $ n - fromEnum (minBound :: a) + fromEnum (maxBound :: a)
+    makeSizedFunc (fromEnum (maxBound :: a) - fromEnum (minBound :: a) + 1) $ toEnum
 
 class Cyclable f where
   moveForeward :: f a -> f a
@@ -87,3 +87,15 @@ class Cyclable f where
 instance Cyclable NE.NonEmpty where
   moveForeward (a NE.:| as) = NE.fromList (as ++ [a])
   moveBackwards (a NE.:| as) = NE.fromList (last as : a : init as)
+
+class GetByIndex f i | f -> i where
+  getByIndex :: i -> Lens' (f a) a
+
+instance GetByIndex [] Int where
+  getByIndex i = singular (ix i)
+
+instance GetByIndex V.Vector Int where
+  getByIndex i = singular (ix i)
+
+instance GetByIndex NE.NonEmpty Int where
+  getByIndex i = singular (ix i)

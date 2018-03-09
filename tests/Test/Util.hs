@@ -4,7 +4,9 @@ import           Hedgehog            hiding (Group)
 import qualified Hedgehog.Gen        as Gen
 import qualified Hedgehog.Range      as Range
 
+import           Control.Comonad
 import           Control.Monad
+import           Data.AdditiveGroup
 import           Data.Group
 import           Data.Semigroup
 import           Test.Tasty
@@ -50,3 +52,25 @@ groupTest genItem =
         , testProperty "InvertRight" $
           property $ forAll genItem >>= \x -> mappend (invert x) x === mempty
         ]
+
+additiveGroupTest :: (Show a, Eq a, AdditiveGroup a) => Gen a -> TestTree
+additiveGroupTest genItem =
+  testGroup
+    "Additive Group Laws"
+    [ testProperty "Right Zero" $
+      property $ forAll genItem >>= \x -> x ^+^ zeroV === x
+    , testProperty "Left Zero" $
+      property $ forAll genItem >>= \x -> zeroV ^+^ x === x
+    , testProperty "Right Negation makes zero" $
+      property $ forAll genItem >>= \x -> negateV x ^+^ x === zeroV
+    , testProperty "Left Negation makes zero" $
+      property $ forAll genItem >>= \x -> x ^+^ negateV x === zeroV
+    ]
+
+comonadTest :: (Show (w a), Eq (w a), Comonad w) => Gen (w a) -> TestTree
+comonadTest genItem =
+  testGroup
+    "Comonad Laws"
+    [ testProperty "Right Identity" $
+      property $ forAll genItem >>= \x -> x === extend extract x
+    ]

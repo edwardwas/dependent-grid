@@ -1,4 +1,4 @@
-{compiler ? "default", profiling ? true}:
+{compiler ? "default", profiling ? false}:
 let
   usedCompiler = if compiler == "default" then "ghc802" else compiler;
   config = doProfile : {

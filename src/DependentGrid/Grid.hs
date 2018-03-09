@@ -10,6 +10,7 @@
 {-# LANGUAGE PolyKinds                  #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -195,53 +196,34 @@ type family AllGridLayersIndex cs f a i where
                                          , AllGridLayersIndex cs f a i)
 
 gridIndexed ::
-       (All IsCoord cs, AllGridLayersIndex cs f a Int)
+       (All IsCoord cs, GetByIndex f Int)
     => Coord cs
     -> Lens' (Grid cs f a) a
 gridIndexed EmptyCoord f (EmptyGrid a) = EmptyGrid <$> f a
 gridIndexed (AddCoord c cs) f (AddGridLayer gl) =
-    AddGridLayer <$> singular (ix (coordAsInt c)) (\g -> gridIndexed cs f g) gl
+    AddGridLayer <$> singular (getByIndex (coordAsInt c)) (\g -> gridIndexed cs f g) gl
 
-newtype FocusedGridT cs f w a = FocusedGridT {unFocusedGrid :: StoreT (Grid cs f) w a}
-  deriving (Functor,Applicative,ComonadTrans,ComonadHoist)
+data FocusedGrid cs f a = FocusedGrid
+  { _focusedGrid  :: Grid cs f a
+  , _focusedCoord :: Coord cs
+  } deriving (Eq,Show,Functor,Foldable,Traversable)
+makeLenses ''FocusedGrid
 
-type FocusedGrid cs f a = FocusedGridT cs f Identity a
+instance (All IsCoord cs, MonadZip f, GetByIndex f Int, MakeSized f) => Comonad (FocusedGrid cs f) where
+  extract fg = fg ^. focusedGrid . gridIndexed (fg ^. focusedCoord)
+  duplicate fg = over focusedGrid (imap (\pos a -> FocusedGrid (fg ^. focusedGrid) pos)) fg
 
-instance ( Functor f
-         , Comonad w
-         , All IsCoord cs
-         , SingI cs
-         , Foldable f
-         , MakeSized f
-         ) =>
-         Comonad (FocusedGridT cs f w) where
-    extract (FocusedGridT sg) = extract sg
-    duplicate (FocusedGridT sg) = FocusedGridT (FocusedGridT <$> duplicate sg)
+instance (All IsCoord cs, MonadZip f, GetByIndex f Int, MakeSized f) =>
+         ComonadStore (Coord cs) (FocusedGrid cs f) where
+  pos = view focusedCoord
+  peek pos fg = fg ^. focusedGrid . gridIndexed pos
 
-instance ( Comonad w
-         , Functor f
-         , Foldable f
-         , SingI cs
-         , All IsCoord cs
-         , MakeSized f
-         ) =>
-         ComonadStore (Coord cs) (FocusedGridT cs f w) where
-    pos (FocusedGridT sg) = pos sg
-    peek c (FocusedGridT sg) = peek c sg
-
-focusGridT :: Lens' (FocusedGridT cs f w a) (w (Grid cs f a))
-focusGridT f (FocusedGridT (StoreT grid pos)) =
-    (\grid' -> FocusedGridT $ StoreT grid' pos) <$> f grid
-
-focusGrid ::
-       (Applicative w, Comonad w) => Lens' (FocusedGridT cs f w a) (Grid cs f a)
-focusGrid = focusGridT . iso extract pure
 
 makeFocusGrid ::
-       (All Monoid cs, Applicative w, SingI cs)
+       (All Monoid cs, SingI cs)
     => Grid cs f a
-    -> FocusedGridT cs f w a
-makeFocusGrid g = FocusedGridT $ StoreT (pure g) mempty
+    -> FocusedGrid cs f a
+makeFocusGrid g = FocusedGrid g mempty
 
 type family CollapsedGrid cs f a where
   CollapsedGrid '[] _ a = a
