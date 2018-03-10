@@ -1,22 +1,18 @@
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GADTs                      #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE InstanceSigs               #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE PolyKinds                  #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE TypeApplications           #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeInType                 #-}
-{-# LANGUAGE TypeOperators              #-}
-{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveTraversable     #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE InstanceSigs          #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeInType            #-}
+{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 module DependentGrid.Grid where
 
@@ -43,6 +39,7 @@ import           Data.Maybe                          (fromJust)
 import           Data.Proxy                          (Proxy (..))
 import           Data.Singletons
 import qualified Data.Singletons.Prelude.List        as S
+import qualified Data.Singletons.Prelude.Num         as S
 import           Data.Type.Monomorphic
 import qualified Data.Type.Natural                   as Peano
 import           Data.Type.Ordinal
@@ -298,3 +295,32 @@ padGridInFront d (AddGridLayer a) =
                AddGridLayer
                    (makeSized (fromIntegral $ newLength - oldLength) (pure d) <|>
                     fmap (padGridInFront d) a)
+
+type family ZipCoordHelper cs ns where
+    ZipCoordHelper '[] '[] = '[]
+    ZipCoordHelper (c ': cs) (n ': ns) = ModifyAmountPossible c (Apply (S.:+$) n) ': ZipCoordHelper cs ns
+
+
+padGrid ::
+       forall a ns cs f newCs.
+       ( SameShape newCs cs
+       , SameShape newCs (ZipCoordHelper cs ns)
+       , SameShape (ZipCoordHelper cs ns) cs
+       , AllAmountPossibleKnowNat cs
+       , AllAmountPossibleKnowNat newCs
+       , AllAmountPossibleKnowNat (ZipCoordHelper cs ns)
+       , SingI cs
+       , SingI newCs
+       , SingI (ZipCoordHelper cs ns)
+       , Alternative f
+       , MonadZip f
+       , MakeSized f
+       )
+    => a
+    -> Proxy (ns :: [GHC.Nat])
+    -> Grid cs f a
+    -> Grid newCs f a
+padGrid a _ g =
+    padGridBehind
+        a
+        (padGridInFront a g :: Grid (ZipCoordHelper cs ns) f a)

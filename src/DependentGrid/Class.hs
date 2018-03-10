@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds        #-}
+{-# LANGUAGE TypeInType#-}
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE DefaultSignatures      #-}
 {-# LANGUAGE FlexibleContexts       #-}
@@ -22,7 +23,7 @@ import           Data.Kind                    (Type)
 import qualified Data.List.NonEmpty           as NE
 import           Data.Maybe                   (fromJust)
 import           Data.Proxy                   (Proxy (..))
-import           Data.Singletons              (Sing, sing)
+import           Data.Singletons              
 import           Data.Singletons.Prelude.Enum (sSucc)
 import qualified Data.Type.Natural            as Peano
 import           Data.Type.Natural.Builtin    (FromPeano, ToPeano, sToPeano)
@@ -50,7 +51,7 @@ instance IsTypeNum Peano.Nat where
 
 class IsCoord (x :: Type) where
   type AmountPossible x :: GHC.Nat
-  type ModifyAmountPossible x (f :: GHC.Nat -> GHC.Nat) :: Type
+  type ModifyAmountPossible x (f :: GHC.Nat ~> GHC.Nat) :: Type
   allPossible :: MakeSized f => f x
   default allPossible :: (Eq x, Bounded x, Enum x) => MakeSized f => f x
   allPossible =  makeAllBounded

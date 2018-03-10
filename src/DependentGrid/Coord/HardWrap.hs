@@ -72,6 +72,6 @@ instance ( MonomorphicRep (Sing :: nat -> Type) ~ int
          ) =>
          IsCoord (HardWrap n) where
     type AmountPossible (HardWrap n) = AsNat n
-    type ModifyAmountPossible (HardWrap n) f = HardWrap (f (AsNat n))
+    type ModifyAmountPossible (HardWrap n) f = HardWrap (Apply f (AsNat n))
     coordAsInt (HardWrap a) =
         fromIntegral $ max 0 $ min (demote' (sing :: Sing n) - 1) $ ordToInt a
