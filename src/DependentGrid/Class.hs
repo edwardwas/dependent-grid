@@ -49,7 +49,7 @@ instance IsTypeNum Peano.Nat where
   asNat (Peano.SS n) = sSucc $ asNat n
   asPeano = id
 
-class IsCoord (x :: Type) where
+class GHC.KnownNat (AmountPossible x) => IsCoord (x :: Type) where
   type AmountPossible x :: GHC.Nat
   type ModifyAmountPossible x (f :: GHC.Nat ~> GHC.Nat) :: Type
   allPossible :: MakeSized f => f x

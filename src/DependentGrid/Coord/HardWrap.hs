@@ -25,6 +25,7 @@ import           Data.Singletons
 import           Data.Type.Monomorphic
 import           Data.Type.Natural.Class.Order
 import           Data.Type.Ordinal
+import qualified GHC.TypeLits                  as GHC
 
 newtype HardWrap (n :: nat) = HardWrap {unHardWrap :: Ordinal n}
 
@@ -69,6 +70,7 @@ instance ( MonomorphicRep (Sing :: nat -> Type) ~ int
          , SingI (n :: nat)
          , HasOrdinal nat
          , Integral int
+         , GHC.KnownNat (AsNat n)
          ) =>
          IsCoord (HardWrap n) where
     type AmountPossible (HardWrap n) = AsNat n

@@ -88,6 +88,7 @@ executable example
     , vty
     , mtl
     , async
+    , generics-sop
   main-is: Main.hs
   hs-source-dirs:      app
   default-language:    Haskell2010

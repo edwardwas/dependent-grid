@@ -29,6 +29,7 @@ import           Data.Type.Monomorphic
 import           Data.Type.Natural.Class.Order
 import           Data.Type.Ordinal
 import           GHC.TypeLits
+import qualified GHC.TypeLits                  as GHC
 
 newtype Periodic (n :: nat) = Periodic {unPeriodic :: Ordinal n}
 
@@ -109,6 +110,7 @@ instance ( MonomorphicRep (Sing :: nat -> Type) ~ int
          , SingI (n :: nat)
          , HasOrdinal nat
          , AdditiveGroup int
+         , GHC.KnownNat (AsNat n)
          ) =>
          IsCoord (Periodic n) where
   type AmountPossible (Periodic n) = AsNat n

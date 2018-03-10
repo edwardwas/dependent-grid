@@ -34,6 +34,7 @@ import           Data.AffineSpace
 import           Data.Foldable                (toList)
 import           Data.Singletons
 import qualified Data.Vector                  as V
+import           Generics.SOP                 (All)
 import qualified Graphics.Vty                 as V
 import           System.Random
 
@@ -84,7 +85,7 @@ randomState ::
        ( MakeSized f
        , MonadZip f
        , Traversable f
-       , AllAmountPossibleKnowNat cs
+       , All IsCoord cs
        , MonadRandom m
        , SingI cs
        )

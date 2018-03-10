@@ -54,11 +54,6 @@ type family ItemsRequired xs where
     ItemsRequired '[] = 1
     ItemsRequired (x ': xs) = AmountPossible x GHC.* ItemsRequired xs
 
-type family AllAmountPossibleKnowNat xs :: Constraint where
-    AllAmountPossibleKnowNat '[] = ()
-    AllAmountPossibleKnowNat (x ': xs) = ( GHC.KnownNat (AmountPossible x)
-                                         , AllAmountPossibleKnowNat xs)
-
 data Grid (cs :: [Type]) f a where
     EmptyGrid :: a -> Grid '[] f a
     AddGridLayer :: f (Grid cs f a) -> Grid (c ': cs) f a
@@ -144,12 +139,7 @@ instance (All IsCoord cs, Traversable f, MonadZip f, MakeSized f) =>
                  allPossible
                  gs)
 
-instance ( AllAmountPossibleKnowNat cs
-         , SingI cs
-         , Applicative f
-         , MonadZip f
-         , MakeSized f
-         ) =>
+instance (SingI cs, Applicative f, MonadZip f, MakeSized f, All IsCoord cs) =>
          Applicative (Grid cs f) where
     pure a =
         case (sing :: Sing cs) of
@@ -159,8 +149,7 @@ instance ( AllAmountPossibleKnowNat cs
                 makeSized
                     (fromIntegral $
                      GHC.natVal (Proxy :: Proxy (AmountPossible n))) $
-                withSingI stail $
-                pure a
+                withSingI stail $ pure a
     EmptyGrid f <*> EmptyGrid a = EmptyGrid (f a)
     AddGridLayer fs <*> AddGridLayer as =
         case (sing :: Sing cs) of
@@ -243,11 +232,11 @@ padGridBehind ::
        ( SingI newCs
        , SameShape newCs cs
        , SingI cs
-       , AllAmountPossibleKnowNat cs
-       , AllAmountPossibleKnowNat newCs
        , Alternative f
        , MakeSized f
        , MonadZip f
+       , All IsCoord cs
+       , All IsCoord newCs
        )
     => a
     -> Grid cs f a
@@ -272,11 +261,11 @@ padGridInFront ::
        ( SingI newCs
        , SameShape newCs cs
        , SingI cs
-       , AllAmountPossibleKnowNat cs
-       , AllAmountPossibleKnowNat newCs
        , Alternative f
        , MakeSized f
        , MonadZip f
+       , All IsCoord cs
+       , All IsCoord newCs
        )
     => a
     -> Grid cs f a
@@ -306,15 +295,15 @@ padGrid ::
        ( SameShape newCs cs
        , SameShape newCs (ZipCoordHelper cs ns)
        , SameShape (ZipCoordHelper cs ns) cs
-       , AllAmountPossibleKnowNat cs
-       , AllAmountPossibleKnowNat newCs
-       , AllAmountPossibleKnowNat (ZipCoordHelper cs ns)
        , SingI cs
        , SingI newCs
        , SingI (ZipCoordHelper cs ns)
        , Alternative f
        , MonadZip f
        , MakeSized f
+       , All IsCoord cs
+       , All IsCoord newCs
+       , All IsCoord (ZipCoordHelper cs ns)
        )
     => a
     -> Proxy (ns :: [GHC.Nat])

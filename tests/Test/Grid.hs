@@ -1,6 +1,8 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE PolyKinds           #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 
 module Test.Grid where
 
@@ -21,7 +23,7 @@ import qualified Hedgehog.Range               as Range
 import           Test.Tasty
 
 genGrid ::
-     (SingI cs, AllAmountPossibleKnowNat cs, Traversable f, MonadZip f, MakeSized f)
+     (SingI cs, All IsCoord cs, Traversable f, MonadZip f, MakeSized f)
   => Gen a
   -> Gen (Grid cs f a)
 genGrid g = sequenceA $ pure g

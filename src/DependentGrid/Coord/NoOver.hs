@@ -22,6 +22,7 @@ import           Data.Singletons.Prelude.Ord
 import           Data.Type.Monomorphic
 import           Data.Type.Natural.Class.Order
 import           Data.Type.Ordinal
+import qualified GHC.TypeLits                  as GHC
 
 data NoOver n
   = InsideGrid (Ordinal n)
@@ -65,11 +66,12 @@ instance ( int ~ MonomorphicRep (Sing :: nat -> Type)
     | otherwise = OutsideGrid
       where c = ordToInt a + b
 
-instance (SingI n, HasOrdinal nat) => IsCoord (NoOver (n :: nat)) where
-  type AmountPossible (NoOver n) = AsNat n
-  type ModifyAmountPossible (NoOver n) f = NoOver (Apply f (AsNat n))
-  allPossible =
-    makeSizedFunc (fromIntegral $ demote' (sing :: Sing n)) $
-    InsideGrid . unsafeFromInt . fromIntegral
-  coordAsInt (InsideGrid n) = fromIntegral $ ordToInt n
-  coordAsInt OutsideGrid    = error "Tried to acces outside grid"
+instance (GHC.KnownNat (AsNat n), SingI n, HasOrdinal nat) =>
+         IsCoord (NoOver (n :: nat)) where
+    type AmountPossible (NoOver n) = AsNat n
+    type ModifyAmountPossible (NoOver n) f = NoOver (Apply f (AsNat n))
+    allPossible =
+        makeSizedFunc (fromIntegral $ demote' (sing :: Sing n)) $
+        InsideGrid . unsafeFromInt . fromIntegral
+    coordAsInt (InsideGrid n) = fromIntegral $ ordToInt n
+    coordAsInt OutsideGrid    = error "Tried to acces outside grid"
