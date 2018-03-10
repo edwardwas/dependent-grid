@@ -21,6 +21,7 @@ import           DependentGrid.Grid
 
 import           Brick
 import           Brick.BChan
+import           Brick.Widgets.Border
 import           Control.Comonad
 import           Control.Comonad.Store
 import           Control.Concurrent           (threadDelay)
@@ -140,7 +141,8 @@ stepWorld = view focusedGrid . gameOfLife . makeFocusGrid
 golApp :: App AppState AppEvent ()
 golApp =
     let helper s (VtyEvent (V.EvKey V.KEsc _)) = halt s
-        helper s (VtyEvent (V.EvKey (V.KChar 'p') _)) = continue $ s & isRunning %~ not
+        helper s (VtyEvent (V.EvKey (V.KChar 'p') _)) =
+            continue $ s & isRunning %~ not
         helper s (VtyEvent (V.EvKey V.KEnter _)) =
             continue $ over grid stepWorld s
         helper s (AppEvent (Tick _)) =
@@ -150,7 +152,16 @@ golApp =
                 else s
         helper s _ = continue s
     in App
-       { appDraw = \g -> [gridWidget $ g ^. grid]
+       { appDraw =
+             \g ->
+                 [ borderWithLabel
+                       (str $
+                        "Game of Life" ++
+                        if (g ^. isRunning)
+                            then ""
+                            else " - Paused") $
+                   gridWidget $ g ^. grid
+                 ]
        , appChooseCursor = \_ _ -> Nothing
        , appHandleEvent = helper
        , appStartEvent = pure
