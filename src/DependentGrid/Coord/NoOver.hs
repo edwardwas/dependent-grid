@@ -67,6 +67,7 @@ instance ( int ~ MonomorphicRep (Sing :: nat -> Type)
 
 instance (SingI n, HasOrdinal nat) => IsCoord (NoOver (n :: nat)) where
   type AmountPossible (NoOver n) = AsNat n
+  type ModifyAmountPossible (NoOver n) f = NoOver (f (AsNat n))
   allPossible =
     makeSizedFunc (fromIntegral $ demote' (sing :: Sing n)) $
     InsideGrid . unsafeFromInt . fromIntegral

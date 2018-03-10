@@ -112,3 +112,4 @@ instance ( MonomorphicRep (Sing :: nat -> Type) ~ int
          ) =>
          IsCoord (Periodic n) where
   type AmountPossible (Periodic n) = AsNat n
+  type ModifyAmountPossible (Periodic n) f = Periodic (f (AsNat n))
