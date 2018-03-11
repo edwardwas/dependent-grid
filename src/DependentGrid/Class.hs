@@ -69,18 +69,21 @@ class MakeSized f where
   makeSized :: Int -> x -> f x
   makeSized n x = makeSizedFunc n (const x)
   makeSizedFunc :: Int -> (Int -> x) -> f x
+  takeSized :: Int -> f x -> Maybe (f x)
 
 instance MakeSized [] where
   makeSized = replicate
   makeSizedFunc n f = take n $ map f [0..]
+  takeSized n xs 
+    | length xs < n = Nothing
+    | otherwise = Just $ take n xs
 
 instance MakeSized V.Vector where
   makeSizedFunc = V.generate
   makeSized = V.replicate
-
-instance MakeSized NE.NonEmpty where
-  makeSizedFunc n = NE.fromList . makeSizedFunc n
-  makeSized n = NE.fromList . makeSized n
+  takeSized n xs
+    | length xs < n = Nothing
+    | otherwise = Just $ V.take n xs
 
 makeAllBounded ::
        forall f a. (Eq a, Enum a, Bounded a, MakeSized f)

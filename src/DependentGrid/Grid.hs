@@ -27,6 +27,7 @@ import           Control.Comonad.Hoist.Class
 import           Control.Comonad.Representable.Store
 import           Control.Comonad.Trans.Class
 import           Control.Lens                        hiding (index)
+import           Control.Monad
 import           Control.Monad.Zip
 import           Data.AffineSpace
 import           Data.Distributive
@@ -55,7 +56,13 @@ data Grid (cs :: [Type]) f a where
     EmptyGrid :: a -> Grid '[] f a
     AddGridLayer :: f (Grid cs f a) -> Grid (c ': cs) f a
 
-type GridLike cs f = (MakeSized f, MonadZip f, All IsCoord cs, SingI cs, GetByIndex f Int)
+type GridLike cs f
+     = ( MakeSized f
+       , MonadZip f
+       , All IsCoord cs
+       , SingI cs
+       , GetByIndex f Int
+       , Traversable f)
 
 addCoordToGrid ::
        forall cs f a. GridLike cs f
@@ -227,6 +234,24 @@ type family CollapsedGrid cs f a where
 collapseGrid :: Functor f => Grid cs f a -> CollapsedGrid cs f a
 collapseGrid (EmptyGrid a)     = a
 collapseGrid (AddGridLayer gs) = collapseGrid <$> gs
+
+rebuildGrid ::
+       forall cs f a. (Traversable f, SingI cs, MakeSized f, All IsCoord cs)
+    => CollapsedGrid cs f a
+    -> Maybe (Grid cs f a)
+rebuildGrid a =
+    case (sing :: Sing cs) of
+        S.SNil -> Just (EmptyGrid a)
+        S.SCons (_ :: Sing n) stail -> do
+            a' <-
+                takeSized
+                    (fromIntegral $
+                     GHC.natVal (Proxy :: Proxy (AmountPossible n)))
+                    a
+            withSingI stail (AddGridLayer <$> traverse rebuildGrid a')
+
+gridSized :: GridLike cs f => Prism' (CollapsedGrid cs f a) (Grid cs f a)
+gridSized = prism' collapseGrid rebuildGrid
 
 type family SameShape f g :: Constraint where
   SameShape (_ ': as) (_ ': bs) = SameShape as bs
