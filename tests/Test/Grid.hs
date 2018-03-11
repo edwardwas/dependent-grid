@@ -23,7 +23,7 @@ import qualified Hedgehog.Range               as Range
 import           Test.Tasty
 
 genGrid ::
-     (SingI cs, All IsCoord cs, Traversable f, MonadZip f, MakeSized f)
+     (SingI cs, All IsCoord cs, Traversable f, MonadZip f, MakeSized f, GridLike cs f)
   => Gen a
   -> Gen (Grid cs f a)
 genGrid g = sequenceA $ pure g

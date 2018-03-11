@@ -81,15 +81,9 @@ stepWorld ::
        , Enum (Diff b)
        , Num (Diff a)
        , Num (Diff b)
-       , SingI a
-       , SingI b
-       , MakeSized f
+       , GridLike '[a,b] f
        , Monoid a
        , Monoid b
-       , GetByIndex f Int
-       , MonadZip f
-       , IsCoord a
-       , IsCoord b
        , AffineSpace a
        , AffineSpace b
        )
@@ -133,10 +127,9 @@ run = do
     chan <- newBChan 2
     timerSync <-
         async $ forever $ writeBChan chan (Tick 0.1) >> threadDelay (10 ^ 5)
+    Just spaceShip <- loadLifeFile "patterns/lwss_106.lif"
     customMain (V.mkVty V.defaultConfig) (Just chan) golApp $
-        AppState True $
-        makeGlider (AddCoord (Periodic 2) $ AddCoord (Periodic 3) EmptyCoord) $
-        pure Dead
+        AppState True $ spaceShip
     cancel timerSync
     return ()
 
