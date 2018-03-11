@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes    #-}
+{-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
@@ -160,6 +161,38 @@ type family DiffCoord (xs :: [k]) :: Type where
 type family MapDiff xs where
   MapDiff '[] = '[]
   MapDiff (x ': xs) = Diff x ': MapDiff xs
+
+coordFromDiff ::
+       forall cs xs.
+       ( IsProductType (DiffCoord cs) xs
+       , All Integral xs
+       , SingI cs
+       , All IsCoord cs
+       )
+    => DiffCoord cs
+    -> Maybe (Coord cs)
+coordFromDiff dc =
+    let helper ::
+               forall ys. (All IsCoord ys, SingI ys)
+            => [Int]
+            -> Maybe (Coord ys)
+        helper [] =
+            case (sing :: Sing ys) of
+                S.SNil -> Just EmptyCoord
+                _      -> Nothing
+        helper (a:as) =
+            case (sing :: Sing ys) of
+                S.SCons shead stail ->
+                    AddCoord <$> coordFromInt a <*> withSingI stail (helper as)
+                _ -> Nothing
+    in case from dc of
+           SOP (Z n) ->
+               helper $
+               hcollapse $
+               hcliftA
+                   (Proxy :: Proxy Integral)
+                   (\(I (x :: x)) -> (K (fromIntegral x) :: K Int a))
+                   n
 
 negHelper ::
        forall cs xs. All AffineSpace xs

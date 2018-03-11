@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeInType            #-}
 {-# LANGUAGE TypeOperators         #-}
@@ -50,22 +51,26 @@ import           GHC.Exts                            (Constraint)
 import qualified GHC.TypeLits                        as GHC
 import           Unsafe.Coerce                       (unsafeCoerce)
 
-type family ItemsRequired xs where
-    ItemsRequired '[] = 1
-    ItemsRequired (x ': xs) = AmountPossible x GHC.* ItemsRequired xs
-
 data Grid (cs :: [Type]) f a where
     EmptyGrid :: a -> Grid '[] f a
     AddGridLayer :: f (Grid cs f a) -> Grid (c ': cs) f a
 
+type GridLike cs f = (MakeSized f, MonadZip f, All IsCoord cs, SingI cs, GetByIndex f Int)
+
 addCoordToGrid ::
-       (All IsCoord cs, MonadZip f, MakeSized f)
+       forall cs f a. GridLike cs f
     => Grid cs f a
     -> Grid cs f (Coord cs, a)
 addCoordToGrid (EmptyGrid a) = EmptyGrid (EmptyCoord, a)
 addCoordToGrid (AddGridLayer gl) =
-    AddGridLayer $
-    mzipWith (\c g -> over _1 (AddCoord c) <$> addCoordToGrid g) allPossible gl
+    case (sing :: Sing cs) of
+        S.SCons _ stail ->
+            withSingI stail $
+            AddGridLayer $
+            mzipWith
+                (\c g -> over _1 (AddCoord c) <$> addCoordToGrid g)
+                allPossible
+                gl
 
 instance (Foldable f, MonadZip f) => Eq1 (Grid cs f) where
     liftEq func (EmptyGrid a) (EmptyGrid b) = func a b
@@ -139,7 +144,7 @@ instance (All IsCoord cs, Traversable f, MonadZip f, MakeSized f) =>
                  allPossible
                  gs)
 
-instance (SingI cs, Applicative f, MonadZip f, MakeSized f, All IsCoord cs) =>
+instance GridLike cs f =>
          Applicative (Grid cs f) where
     pure a =
         case (sing :: Sing cs) of
@@ -198,7 +203,7 @@ data FocusedGrid cs f a = FocusedGrid
 
 makeLenses ''FocusedGrid
 
-instance (All IsCoord cs, MonadZip f, GetByIndex f Int, MakeSized f) =>
+instance (GridLike cs f) =>
          Comonad (FocusedGrid cs f) where
     extract fg = fg ^. focusedGrid . gridIndexed (fg ^. focusedCoord)
     duplicate fg =
@@ -207,7 +212,7 @@ instance (All IsCoord cs, MonadZip f, GetByIndex f Int, MakeSized f) =>
             (imap (\pos a -> FocusedGrid (fg ^. focusedGrid) pos))
             fg
 
-instance (All IsCoord cs, MonadZip f, GetByIndex f Int, MakeSized f) =>
+instance GridLike cs f =>
          ComonadStore (Coord cs) (FocusedGrid cs f) where
     pos = view focusedCoord
     peek pos fg = fg ^. focusedGrid . gridIndexed pos
@@ -229,15 +234,7 @@ type family SameShape f g :: Constraint where
 
 padGridBehind ::
        forall newCs cs f a.
-       ( SingI newCs
-       , SameShape newCs cs
-       , SingI cs
-       , Alternative f
-       , MakeSized f
-       , MonadZip f
-       , All IsCoord cs
-       , All IsCoord newCs
-       )
+       (SameShape newCs cs, Alternative f, GridLike newCs f, GridLike cs f)
     => a
     -> Grid cs f a
     -> Grid newCs f a
@@ -258,15 +255,7 @@ padGridBehind d (AddGridLayer a) =
 
 padGridInFront ::
        forall newCs cs f a.
-       ( SingI newCs
-       , SameShape newCs cs
-       , SingI cs
-       , Alternative f
-       , MakeSized f
-       , MonadZip f
-       , All IsCoord cs
-       , All IsCoord newCs
-       )
+       (SameShape newCs cs, Alternative f, GridLike newCs f, GridLike cs f)
     => a
     -> Grid cs f a
     -> Grid newCs f a
@@ -295,15 +284,10 @@ padGrid ::
        ( SameShape newCs cs
        , SameShape newCs (ZipCoordHelper cs ns)
        , SameShape (ZipCoordHelper cs ns) cs
-       , SingI cs
-       , SingI newCs
-       , SingI (ZipCoordHelper cs ns)
+       , GridLike cs f
+       , GridLike newCs f
+       , GridLike (ZipCoordHelper cs ns) f
        , Alternative f
-       , MonadZip f
-       , MakeSized f
-       , All IsCoord cs
-       , All IsCoord newCs
-       , All IsCoord (ZipCoordHelper cs ns)
        )
     => a
     -> Proxy (ns :: [GHC.Nat])

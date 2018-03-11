@@ -17,6 +17,7 @@ module DependentGrid.Coord.HardWrap where
 
 import           DependentGrid.Class
 
+import           Control.Monad
 import           Data.AdditiveGroup
 import           Data.AffineSpace
 import           Data.Kind                     (Type)
@@ -77,3 +78,7 @@ instance ( MonomorphicRep (Sing :: nat -> Type) ~ int
     type ModifyAmountPossible (HardWrap n) f = HardWrap (Apply f (AsNat n))
     coordAsInt (HardWrap a) =
         fromIntegral $ max 0 $ min (demote' (sing :: Sing n) - 1) $ ordToInt a
+    coordFromInt n = do
+      guard (n > 0)
+      guard (n < fromIntegral ( demote' (sing :: Sing n)))
+      return $ HardWrap $ unsafeFromInt $ fromIntegral n

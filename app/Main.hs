@@ -12,6 +12,9 @@
 
 module Main where
 
+import           Parser
+import           Types
+
 import           DependentGrid.Class
 import           DependentGrid.Coord
 import           DependentGrid.Coord.HardWrap
@@ -38,61 +41,16 @@ import           Generics.SOP                 (All)
 import qualified Graphics.Vty                 as V
 import           System.Random
 
-data CellState
-    = Alive
-    | Dead
-    deriving (Eq, Show, Ord)
-
-flipCellState :: CellState -> CellState
-flipCellState Alive = Dead
-flipCellState Dead  = Alive
-
-cellStateFromBool True  = Alive
-cellStateFromBool False = Dead
-
-gameOfLife ::
-       forall a b f i.
-       ( IsCoord a
-       , IsCoord b
-       , MonadZip f
-       , GetByIndex f Int
-       , MakeSized f
-       , AllDiffEq '[ a, b] i
-       , AffineSpace a
-       , AffineSpace b
-       , Enum i
-       , Num i
-       )
-    => FocusedGrid '[ a, b] f CellState
-    -> FocusedGrid '[ a, b] f CellState
-gameOfLife =
-  let helper g =
-        let alive = Alive == extract g
-            l = fromIntegral (length neigh) - if alive then 1 else 0
-            neigh =
-              filter (== Alive) $
-              map (`peek` g) $ mooreNeighborhood (1 :: i) (pos g)
-        in if alive
-             then if l < 2 || l > 3
-                    then Dead
-                    else Alive
-             else if l == 3
-                    then Alive
-                    else Dead
-  in extend helper
 
 randomState ::
-       ( MakeSized f
-       , MonadZip f
-       , Traversable f
-       , All IsCoord cs
+       ( GridLike cs f
        , MonadRandom m
-       , SingI cs
+       , Traversable f
        )
     => m (Grid cs f CellState)
 randomState = sequenceA $ pure (cellStateFromBool <$> getRandom)
 
-gridWidget :: (Foldable f, Functor f) => Grid '[ a, b] f CellState -> Widget n
+gridWidget :: (Foldable f, GridLike '[a,b] f) => Grid '[ a, b] f CellState -> Widget n
 gridWidget g =
     let helper Alive = str "#"
         helper Dead  = str "."

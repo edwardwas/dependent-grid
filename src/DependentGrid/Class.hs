@@ -58,6 +58,12 @@ class GHC.KnownNat (AmountPossible x) => IsCoord (x :: Type) where
   coordAsInt :: x -> Int
   default coordAsInt :: (AffineSpace x, Integral (Diff x), AdditiveGroup x) => x -> Int
   coordAsInt a = fromIntegral (a .-. zeroV)
+  coordFromInt :: Int -> Maybe x
+  default coordFromInt ::
+         (AffineSpace x, Monoid x, Integral (Diff x), AdditiveGroup (Diff x))
+      => Int
+      -> Maybe x
+  coordFromInt n = Just (mempty .+^ (fromIntegral n :: Diff x))
 
 class MakeSized f where
   makeSized :: Int -> x -> f x

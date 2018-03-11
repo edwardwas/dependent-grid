@@ -12,6 +12,7 @@ module DependentGrid.Coord.NoOver where
 
 import           DependentGrid.Class
 
+import           Control.Monad
 import           Data.AdditiveGroup
 import           Data.AffineSpace
 import           Data.Kind                     (Type)
@@ -75,3 +76,8 @@ instance (GHC.KnownNat (AsNat n), SingI n, HasOrdinal nat) =>
         InsideGrid . unsafeFromInt . fromIntegral
     coordAsInt (InsideGrid n) = fromIntegral $ ordToInt n
     coordAsInt OutsideGrid    = error "Tried to acces outside grid"
+    coordFromInt n = do
+      guard (n > 0)
+      guard (n < fromIntegral ( demote' (sing :: Sing n)))
+      return $ InsideGrid $ unsafeFromInt $ fromIntegral n
+
