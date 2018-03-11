@@ -1,16 +1,21 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
 
 module Types where
 
 import           DependentGrid.Coord
+import           DependentGrid.Coord.Periodic
 import           DependentGrid.Grid
 
 import           Control.Comonad
 import           Control.Comonad.Store
+import           Control.Lens
 import           Data.AffineSpace
+import qualified Data.Vector                  as V
 
 data CellState
     = Alive
@@ -50,3 +55,12 @@ gameOfLife =
                     then Alive
                     else Dead
   in extend helper
+
+data RunningState = RunningState
+    { _isRunning :: Bool
+    , _grid      :: Grid '[ Periodic 80, Periodic 25] V.Vector CellState
+    } deriving (Eq,Show)
+makeLenses ''RunningState
+
+data AppState = Running RunningState
+  deriving (Eq,Show)

@@ -12,6 +12,7 @@
 
 module Main where
 
+import           Handler
 import           Parser
 import           Types
 
@@ -69,12 +70,6 @@ data RenderInfo = RenderInfo
     { squareSize :: Double
     } deriving (Eq, Show)
 
-data AppState = AppState
-    { _isRunning :: Bool
-    , _grid      :: Grid '[ Periodic 80, Periodic 25] V.Vector CellState
-    }
-makeLenses ''AppState
-
 stepWorld ::
        ( Diff a ~ Diff b
        , Enum (Diff a)
@@ -91,9 +86,12 @@ stepWorld ::
     -> Grid '[ a, b] f CellState
 stepWorld = view focusedGrid . gameOfLife . makeFocusGrid
 
+makePrisms ''BrickEvent
+
 golApp :: App AppState AppEvent ()
 golApp =
-    let helper s (VtyEvent (V.EvKey V.KEsc _)) = halt s
+    let
+        helper s (VtyEvent (V.EvKey V.KEsc _)) = halt s
         helper s (VtyEvent (V.EvKey (V.KChar 'p') _)) =
             continue $ s & isRunning %~ not
         helper s (VtyEvent (V.EvKey V.KEnter _)) =
@@ -106,7 +104,7 @@ golApp =
         helper s _ = continue s
     in App
        { appDraw =
-             \g ->
+             \(Running g) ->
                  [ borderWithLabel
                        (str $
                         "Game of Life" ++
@@ -116,7 +114,7 @@ golApp =
                    gridWidget $ g ^. grid
                  ]
        , appChooseCursor = \_ _ -> Nothing
-       , appHandleEvent = helper
+       , appHandleEvent = \(Running g) -> fmap (fmap Running) . helper g
        , appStartEvent = pure
        , appAttrMap = \_ -> attrMap V.defAttr []
        }
@@ -129,7 +127,7 @@ run = do
         async $ forever $ writeBChan chan (Tick 0.1) >> threadDelay (10 ^ 5)
     Just spaceShip <- loadLifeFile "patterns/lwss_106.lif"
     customMain (V.mkVty V.defaultConfig) (Just chan) golApp $
-        AppState True $ spaceShip
+        Running $ RunningState True $ spaceShip
     cancel timerSync
     return ()
 
