@@ -64,3 +64,8 @@ makeLenses ''RunningState
 
 data AppState = Running RunningState
   deriving (Eq,Show)
+makePrisms ''AppState
+
+data AppEvent = Tick Double
+  deriving (Eq,Show)
+makePrisms ''AppEvent

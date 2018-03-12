@@ -28,18 +28,21 @@ import           Brick.BChan
 import           Brick.Widgets.Border
 import           Control.Comonad
 import           Control.Comonad.Store
-import           Control.Concurrent           (threadDelay)
+import           Control.Concurrent                   (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Lens
 import           Control.Monad.Random
 import           Control.Monad.State
 import           Control.Monad.Zip
 import           Data.AffineSpace
-import           Data.Foldable                (toList)
+import           Data.Foldable                        (toList)
+import           Data.Functor.Contravariant
+import           Data.Functor.Contravariant.Divisible
+import           Data.Semigroup
 import           Data.Singletons
-import qualified Data.Vector                  as V
-import           Generics.SOP                 (All)
-import qualified Graphics.Vty                 as V
+import qualified Data.Vector                          as V
+import           Generics.SOP                         (All)
+import qualified Graphics.Vty                         as V
 import           System.Random
 
 
@@ -87,21 +90,26 @@ stepWorld ::
 stepWorld = view focusedGrid . gameOfLife . makeFocusGrid
 
 makePrisms ''BrickEvent
+makePrisms ''V.Event
+makePrisms ''V.Key
 
 golApp :: App AppState AppEvent ()
 golApp =
-    let
-        helper s (VtyEvent (V.EvKey V.KEsc _)) = halt s
-        helper s (VtyEvent (V.EvKey (V.KChar 'p') _)) =
-            continue $ s & isRunning %~ not
-        helper s (VtyEvent (V.EvKey V.KEnter _)) =
-            continue $ over grid stepWorld s
-        helper s (AppEvent (Tick _)) =
-            continue $
-            if s ^. isRunning
-                then over grid stepWorld s
-                else s
-        helper s _ = continue s
+    let handlers =
+            zoomHandler _Running $
+            zoomDecidable
+                (_VtyEvent . _EvKey . _1)
+                (mconcat
+                     [ zoomDecidable
+                           (_KChar . filtered (== 'p'))
+                           (pureHandler (isRunning %~ not))
+                     , zoomDecidable _KEnter $ pureHandler (over grid stepWorld)
+                     , zoomDecidable _KEsc stopHandler
+                     ]) <>
+            zoomDecidable
+                (_AppEvent . _Tick)
+                (filterHandlerState (view isRunning) $
+                 pureHandler $ over grid stepWorld)
     in App
        { appDraw =
              \(Running g) ->
@@ -114,12 +122,10 @@ golApp =
                    gridWidget $ g ^. grid
                  ]
        , appChooseCursor = \_ _ -> Nothing
-       , appHandleEvent = \(Running g) -> fmap (fmap Running) . helper g
+       , appHandleEvent = runHandler handlers
        , appStartEvent = pure
        , appAttrMap = \_ -> attrMap V.defAttr []
        }
-
-data AppEvent = Tick Double
 
 run = do
     chan <- newBChan 2

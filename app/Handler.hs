@@ -3,15 +3,23 @@
 module Handler where
 
 import           Brick
+import           Control.Applicative
 import           Control.Lens
 import           Control.Monad.Trans.Maybe
 import           Data.Functor.Contravariant
 import           Data.Functor.Contravariant.Divisible
 import           Data.Maybe
-import           Data.Semigroup
+import           Data.Monoid                          (First)
+import           Data.Semigroup                       hiding (First)
 import qualified Graphics.Vty                         as V
 
 newtype Handler n s e = Handler {unHandler :: e -> s -> MaybeT (EventM n) s}
+
+pureHandler :: (s -> s) -> Handler n s e
+pureHandler f = Handler $ \e -> pure . f
+
+stopHandler :: Handler n s e
+stopHandler = Handler $ \_ _ -> empty
 
 runHandler ::
        Handler n s (BrickEvent n e) -> s -> BrickEvent n e -> EventM n (Next s)
@@ -48,3 +56,13 @@ instance Decidable (Handler n s) where
 
 zoomHandler :: Traversal' a b -> Handler n b e -> Handler n a e
 zoomHandler l (Handler f) = Handler $ \e -> traverseOf l (f e)
+
+filterHandlerState :: (s -> Bool) -> Handler n s e -> Handler n s e
+filterHandlerState pred (Handler func) =
+    Handler $ \e s ->
+        if pred s
+            then func e s
+            else pure s
+
+zoomDecidable :: Decidable f => Getting (First b) a b -> f b -> f a
+zoomDecidable l = contramap (preview l) . choose (maybe (Left ()) Right) conquer
